@@ -1,0 +1,106 @@
+\documentclass[10pt]{article}
+\setlength\parindent{0pt}
+\usepackage[utf8]{inputenc}
+%\usepackage[russian]{babel}
+
+\usepackage{supertabular}
+\usepackage{fontawesome}
+\usepackage{geometry}
+\geometry{
+    hmargin=1.5cm,
+    vmargin=1.75cm,
+    a4paper,
+    %showframe,
+}
+\usepackage[sf,scale=0.95]{libertine}
+\usepackage[usenames,svgnames]{xcolor}
+\definecolor{text}{HTML}{2b2b2b}
+\definecolor{headings}{HTML}{701112}
+\definecolor{shade}{HTML}{F5DD9D}
+\definecolor{linkcolor}{HTML}{641c1d}
+\color{text}
+
+\usepackage{hyperref}
+\hypersetup{colorlinks, breaklinks, urlcolor=linkcolor, linkcolor=linkcolor}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\usepackage[nobottomtitles*]{titlesec}
+\renewcommand{\bottomtitlespace}{0.1\textheight}
+\titleformat{\section}{\scshape\LARGE\raggedright}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{0pt}{8pt}
+
+\begin{document}
+
+\parbox[top][0.12\textheight][c]{\linewidth}{
+    \vspace{-0.04\textheight}
+    \centering
+    {\sffamily\Huge Viktor Krapivenskiy}\\\medskip
+    {\Huge Curriculum Vitae}
+}
+
+\medskip
+
+\section{About}
+
+Computer programmer.
+Interested in
+  techniques of writing clean and maintainable code,
+  software architecture,
+  programming language theory,
+  parallel programming,
+  systems programming,
+  Unix philosophy.
+Author of a number of side-projects.
+Participant of Google Summer of Code---2017.
+
+\section{Education}
+
+\begin{tabular}{ l l }
+    2016---present & \textbf{Moscow Institute of Physics and Technology}, Department of Innovations and High Technology \\
+\end{tabular}
+
+\medskip
+
+\section{Awards}
+
+\begin{tabular}{ l l }
+    2016 & Prizewinner of the All-Russian Olympiad in Informatics, Finals \\
+    2016 & Gold winner of the Individual Olympiad of School Students in Informatics and Programming, Finals \\
+    2017 & 4\textsuperscript{th} place in ``LAToken hackathon'': smart contract for tokenization of different kinds of assets \\
+    2018 & 1\textsuperscript{st} place in ``Global Changers'' hackathon: client support bot system \\
+    2018 & 1\textsuperscript{st} place in ``IDACB \& CryptoBazar hackathon'': chat based on proxy re-encyption protocol \\
+    2018 & 1\textsuperscript{st} place in ``Phystech.Genesis'' hackathon: mobile application for traveling \\
+    2018 & 3\textsuperscript{st} place in ``CryptoBazar Serial Hackathon: October'': PoC software raytracer using Intel SGX \\
+    2018 & 1\textsuperscript{st} place in ``CryptoBazar Serial Hackathon: November'': LLVM IR interpreter with register-based VM \\
+\end{tabular}
+
+\medskip
+
+\section{Projects}
+
+\begin{tabular}{ l l }
+    2016---present & \href{https://github.com/shdown/luastatus}{\textbf{luastatus}}, a universal status bar content generator \\
+    2017 & \href{http://0x1.tv/img_auth.php/f/fe/Lua-%D1%81%D0%BA%D1%80%D0%B8%D0%BF%D1%82%D0%B8%D0%BD%D0%B3_%D0%B2_strace_%28%D0%92%D0%B8%D0%BA%D1%82%D0%BE%D1%80_%D0%9A%D1%80%D0%B0%D0%BF%D0%B8%D0%B2%D0%B5%D0%BD%D1%81%D0%BA%D0%B8%D0%B9%2C_OSSDEVCONF-2017%29.pdf}{\textbf{support for Lua scripting in strace}}, Google Summer of Code---2017 project \\
+    2018---present & \href{https://github.com/shdown/calx}{\textbf{calx}}, a bc-like programming language \\
+\end{tabular}
+
+\medskip
+
+\section{References}
+
+\parbox[top][0.12\textheight][c]{\linewidth}{
+    \vspace{-0.04\textheight}
+    \colorbox{shade}{
+        \begin{supertabular}{p{0.05\linewidth}|p{0.775\linewidth}}
+            \raisebox{0pt}{\small  \faEnvelope}        & \href{mailto:krapivenskiy.va@phystech.edu}{krapivenskiy.va@phystech.edu} \\
+            \raisebox{0pt}{\small  \faEnvelope}        & \href{mailto:shdownnine@gmail.com}{shdownnine@gmail.com} \\
+            \raisebox{-1pt}{\small \faGithubAlt}       & \href{https://github.com/shdown}{https://github.com/shdown} \\
+            \raisebox{-1pt}{\small \faLinkedinSquare}  & \href{https://www.linkedin.com/in/victor-krapivensky-297912146/}{https://www.linkedin.com/in/victor-krapivensky-297912146/} \\
+            \raisebox{-1pt}{\small \faMapSigns}        & Dolgoprudny, Moscow oblast, Russia \\
+        \end{supertabular}
+    }
+}
+
+\end{document}
