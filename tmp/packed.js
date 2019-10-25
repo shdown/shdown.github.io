@@ -5,11 +5,13 @@ var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-// Sends event to client
-_vkConnect.default.send('VKWebAppInit'); // Subscribes to event, sended by client
+// Subscribes to event, sended by client
+_vkConnect.default.subscribe(e => console.log(e)); // Sends event to client
 
 
-_vkConnect.default.subscribe(e => console.log(e));
+_vkConnect.default.send('VKWebAppInit', {});
+
+_vkConnect.default.send("VKWebAppGetUserInfo", {});
 
 },{"@vkontakte/vk-connect":2}],2:[function(require,module,exports){
 (function (global){
