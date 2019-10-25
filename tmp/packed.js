@@ -7,9 +7,11 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 //connect.subscribe(e => console.log(e));
 _vkConnect.default.sendPromise('VKWebAppInit', {}).then(data => {
-  console.log('data:', data);
+  console.log('data:');
+  console.log(data);
 }).catch(error => {
-  console.log('error:', error);
+  console.log('error:');
+  console.log(error);
 }); //connect.send("VKWebAppGetUserInfo", {});
 
 },{"@vkontakte/vk-connect":2}],2:[function(require,module,exports){
