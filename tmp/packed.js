@@ -46,9 +46,18 @@ var _config = require("./config.js");
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
+  const logArea = document.createElement('div');
+  logArea.innerHTML = '<b>Log area:</b>';
+
+  const say = what => {
+    const line = document.createElement('div');
+    line.innerHTML = (0, _html_escape.htmlEscape)(what);
+    logArea.appendChild(line);
+    return line;
+  };
 
   const showError = (what, error) => {
-    body.innerHTML = `<b>Error</b>: ${(0, _html_escape.htmlEscape)(what)}: ${(0, _html_escape.htmlEscape)(error)}`;
+    return say(`ERROR: ${what}: ${error}`);
   };
 
   const work2 = (id, access_token) => {
@@ -63,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
       request_id: '1a'
     }).on('VKWebAppCallAPIMethodResult', data => {
       console.log(data);
+      say(data);
     }).on('VKWebAppCallAPIMethodFailed', data => {
       showError('execute', data);
     }).schedule();
@@ -71,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const work = id => {
     new _vk_request.VkRequest('VKWebAppGetAuthToken', {
       app_id: _config.config.APP_ID,
-      scope: 'friends'
+      scope: ''
     }).on('VKWebAppAccessTokenReceived', data => {
       work2(id, data.access_token);
     }).on('VKWebAppAccessTokenFailed', data => {
@@ -79,25 +89,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }).schedule();
   };
 
-  const logArea = document.createElement('div');
-  logArea.innerHTML = '<b>Log area:</b>';
-
-  const say = what => {
-    const line = document.createElement('div');
-    line.innerHTML = (0, _html_escape.htmlEscape)(what);
-    logArea.appendChild(line);
-  };
-
   const form = document.createElement('form');
   form.innerHTML = 'User ID: ';
   const input = document.createElement('input');
   input.setAttribute('type', 'number');
+  input.setAttribute('autofocus', '1');
+  input.setAttribute('required', '1');
   const btn = document.createElement('input');
   btn.setAttribute('type', 'submit');
 
   form.onsubmit = () => {
-    const x = parseInt(input.value);
-    if (isNaN(x)) say('Invalid number!');else work(x); // Do not reload the page!
+    const text = input.value;
+    const id = parseInt(text);
+    if (isNaN(id)) showError('Invalid number', text);else work(id); // Do not reload the page!
 
     return false;
   };
