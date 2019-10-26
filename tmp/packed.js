@@ -38,12 +38,29 @@ document.addEventListener('DOMContentLoaded', () => {
     body.innerHTML = `<b>Error</b>: ${(0, _html_escape.htmlEscape)(what)}: ${(0, _html_escape.htmlEscape)(error)}`;
   };
 
+  const work2 = (id, access_token) => {
+    const params = {
+      v: '5.101',
+      access_token: access_token,
+      code: 'return [API.utils.getServerTime()];'
+    };
+    new _vk_request.VkRequest('VKWebAppCallAPIMethod', {
+      method: 'execute',
+      params: params,
+      request_id: '1a'
+    }).on('VKWebAppCallAPIMethodResult', data => {
+      console.log(data);
+    }).on('VKWebAppCallAPIMethodFailed', data => {
+      showError('execute', data);
+    }).schedule();
+  };
+
   const work = id => {
     new _vk_request.VkRequest('VKWebAppGetAuthToken', {
       app_id: APP_ID,
       scope: 'friends'
     }).on('VKWebAppAccessTokenReceived', data => {
-      alert(data);
+      work2(id, data.access_token);
     }).on('VKWebAppAccessTokenFailed', data => {
       showError('GetAuthToken', data);
     }).schedule();
