@@ -97,7 +97,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   form.onsubmit = () => {
     const x = parseInt(input.value);
-    if (isNaN(x)) say('Invalid number!');else work(x);
+    if (isNaN(x)) say('Invalid number!');else work(x); // Do not reload the page!
+
+    return false;
   };
 
   form.appendChild(input);
