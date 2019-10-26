@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   friendBtn.onclick = () => {
     (0, _vk_request.vkRequest)('VKWebAppGetFriends').then(data => {
+      console.log('got data');
       if (data.users && data.users[0]) work(data.users[0].id);
     }).catch(error => showError('GetFriends', error));
   };
@@ -61,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   customBtn.onclick = () => {
     const id = parseInt(idInput.value);
-    if (!id.isNaN()) work(id);
+    if (!isNaN(id)) work(id);
   };
 
   customDiv.appendChild(idInput);
