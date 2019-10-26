@@ -69,7 +69,8 @@ const main = () => {
   body.appendChild(customDiv);
 };
 
-(0, _vk_request.vkRequest)('VKWebAppInit').then(() => main()).catch(error => showError('Init', error)); //make_request('')
+(0, _vk_request.vkRequest)('VKWebAppInit').then(() => {});
+main(); //make_request('')
 //connect.send('VKWebAppGetUserInfo');
 //
 //    .sendPromise('VKWebAppInit', {})
