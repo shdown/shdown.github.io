@@ -29,17 +29,18 @@ var _vk_request = require("./vk_request.js");
 
 var _html_escape = require("./html_escape.js");
 
-const body = document.getElementsByTagName('body')[0];
+document.addEventListener('DOMContentLoaded', () => {
+  (0, _vk_request.vkRequest)('VKWebAppInit').then(() => {});
+  const body = document.getElementsByTagName('body')[0];
 
-const showError = (what, error) => {
-  body.innerHTML = `<b>Error</b>: ${(0, _html_escape.htmlEscape)(what)}: ${(0, _html_escape.htmlEscape)(error)}`;
-};
+  const showError = (what, error) => {
+    body.innerHTML = `<b>Error</b>: ${(0, _html_escape.htmlEscape)(what)}: ${(0, _html_escape.htmlEscape)(error)}`;
+  };
 
-const work = id => {
-  alert(id);
-};
+  const work = id => {
+    alert(id);
+  };
 
-const main = () => {
   const friendBtn = document.createElement('input');
   friendBtn.setAttribute('type', 'button');
   friendBtn.setAttribute('value', 'Select a friend');
@@ -67,22 +68,7 @@ const main = () => {
   customDiv.appendChild(customBtn);
   body.appendChild(friendBtn);
   body.appendChild(customDiv);
-};
-
-(0, _vk_request.vkRequest)('VKWebAppInit').then(() => {});
-main(); //make_request('')
-//connect.send('VKWebAppGetUserInfo');
-//
-//    .sendPromise('VKWebAppInit', {})
-//    .then(data => {
-//        console.log('data:');
-//        console.log(data);
-//    })
-//    .catch(error => {
-//        console.log('error:');
-//        console.log(error);
-//    });
-//connect.send("", {});
+});
 
 },{"./html_escape.js":1,"./vk_request.js":4}],3:[function(require,module,exports){
 (function (global){
