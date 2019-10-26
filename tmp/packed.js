@@ -25,16 +25,14 @@ exports.htmlEscape = htmlEscape;
 },{}],2:[function(require,module,exports){
 "use strict";
 
-var _vk_request = _interopRequireDefault(require("./vk_request.js"));
+var _vk_request = require("./vk_request.js");
 
-var _html_escape = _interopRequireDefault(require("./html_escape.js"));
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+var _html_escape = require("./html_escape.js");
 
 const body = document.getElementsByTagName('body')[0];
 
 const showError = (what, error) => {
-  body.innerHTML = `<b>Error</b>: ${(0, _html_escape.default)(what)}: ${(0, _html_escape.default)(error)}`;
+  body.innerHTML = `<b>Error</b>: ${(0, _html_escape.htmlEscape)(what)}: ${(0, _html_escape.htmlEscape)(error)}`;
 };
 
 const work = id => {
@@ -47,7 +45,7 @@ const main = () => {
   friendBtn.setAttribute('value', 'Select a friend');
 
   friendBtn.onclick = () => {
-    (0, _vk_request.default)('VKWebAppGetFriends').then(data => {
+    (0, _vk_request.vkRequest)('VKWebAppGetFriends').then(data => {
       if (data.users && data.users[0]) work(data.users[0].id);
     }).catch(error => showError('GetFriends', error));
   };
@@ -71,7 +69,7 @@ const main = () => {
   body.appendChild(customDiv);
 };
 
-(0, _vk_request.default)('VKWebAppInit').then(() => main()).catch(error => showError('Init', error)); //make_request('')
+(0, _vk_request.vkRequest)('VKWebAppInit').then(() => main()).catch(error => showError('Init', error)); //make_request('')
 //connect.send('VKWebAppGetUserInfo');
 //
 //    .sendPromise('VKWebAppInit', {})
