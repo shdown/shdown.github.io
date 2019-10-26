@@ -29,8 +29,9 @@ var _vk_request = require("./vk_request.js");
 
 var _html_escape = require("./html_escape.js");
 
+const APP_ID = 7184377;
 document.addEventListener('DOMContentLoaded', () => {
-  (0, _vk_request.vkRequest)('VKWebAppInit').then(() => {});
+  new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
 
   const showError = (what, error) => {
@@ -38,22 +39,18 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const work = id => {
-    alert(id);
-  };
-
-  const friendBtn = document.createElement('input');
-  friendBtn.setAttribute('type', 'button');
-  friendBtn.setAttribute('value', 'Select a friend');
-
-  friendBtn.onclick = () => {
-    (0, _vk_request.vkRequest)('VKWebAppGetFriends').then(data => {
-      console.log('got data');
-      if (data.users && data.users[0]) work(data.users[0].id);
-    }).catch(error => showError('GetFriends', error));
+    new _vk_request.VkRequest('VKWebAppGetAuthToken', {
+      app_id: APP_ID,
+      scope: 'friends'
+    }).on('VKWebAppAccessTokenReceived', data => {
+      alert(data);
+    }).on('VKWebAppAccessTokenFailed', data => {
+      showError('GetAuthToken', data);
+    }).schedule();
   };
 
   const customDiv = document.createElement('div');
-  customDiv.innerHTML = 'Or input user ID manually:';
+  customDiv.innerHTML = 'User ID: ';
   const idInput = document.createElement('input');
   idInput.setAttribute('type', 'number');
   const customBtn = document.createElement('input');
@@ -62,12 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   customBtn.onclick = () => {
     const id = parseInt(idInput.value);
-    if (!isNaN(id)) work(id);
+    if (isNaN(id)) idInput.value = '';else work(id);
   };
 
   customDiv.appendChild(idInput);
   customDiv.appendChild(customBtn);
-  body.appendChild(friendBtn);
   body.appendChild(customDiv);
 });
 
@@ -82,31 +78,21 @@ document.addEventListener('DOMContentLoaded', () => {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.vkRequest = void 0;
+exports.VkRequest = void 0;
 
 var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+const methodsByKey = {};
 const requestsByMethod = {};
 
 const doSend = request => {
+  for (let key in request.callbacks) methodsByKey[key] = request.method;
+
   requestsByMethod[request.method] = request;
 
   _vkConnect.default.send(request.method, request.params);
-};
-
-const parseEventType = type => {
-  let m;
-  if (m = type.match(/^(.*)Result$/)) return {
-    ok: true,
-    method: m[1]
-  };
-  if (m = type.match(/^(.*)Failed$/)) return {
-    ok: false,
-    method: m[1]
-  };
-  throw `Cannot parse VK event type: ${type}`;
 };
 
 _vkConnect.default.subscribe(event => {
@@ -114,23 +100,24 @@ _vkConnect.default.subscribe(event => {
     type,
     data
   } = event.detail;
-  const {
-    ok,
-    method
-  } = parseEventType(type);
+  const method = methodsByKey[type];
+  if (!method) throw `Unknown VK event type: ${type}`;
   const request = requestsByMethod[method];
   if (request.next) doSend(request.next);else delete requestsByMethod[method];
-  const callback = ok ? request.resolve : request.reject;
-  if (callback) callback(data);
+  request.callbacks[type](data);
 });
 
-class Req {
-  constructor(method, params, resolve, reject) {
+class VkRequest {
+  constructor(method, params) {
     this.method = method;
     this.params = params;
-    this.resolve = resolve;
-    this.reject = reject;
+    this.callbacks = {};
     this.next = null;
+  }
+
+  on(key, fn) {
+    this.callbacks[key] = fn;
+    return this;
   }
 
   schedule() {
@@ -146,12 +133,6 @@ class Req {
 
 }
 
-const vkRequest = (method, params) => {
-  return new Promise((resolve, reject) => {
-    new Req(method, params, resolve, reject).schedule();
-  });
-};
-
-exports.vkRequest = vkRequest;
+exports.VkRequest = VkRequest;
 
 },{"@vkontakte/vk-connect":3}]},{},[2]);
