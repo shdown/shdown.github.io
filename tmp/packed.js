@@ -273,7 +273,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     say('Transferring control to searchPosts()...');
     await (0, _core.searchPosts)(config, (what, data) => {
-      say(`callback: ${what}: ${data}`);
+      if (what === 'found') {
+        say(`FOUND: https://vk.com/wall${gid}_${data}`);
+      } else {
+        say(`callback: ${what}: ${data}`);
+      }
     });
   }
 
