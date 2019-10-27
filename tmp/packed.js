@@ -247,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return result.access_token;
   }
 
-  async function work(uid, gid) {
+  async function work(uid, gid, tl_days) {
     say('Calling VKWebAppInit...');
     await (0, _vk_request.vkSendRequestIgnored)('VKWebAppInit', {});
     const session = new _vk_request.VkApiSession();
@@ -267,9 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
       commentsPerRequest: 150,
       pprInitial: 24,
       pprAdjustFunc: n => Math.max(1, n - 2),
-      timeLimit: serverTime -
-      /*one week*/
-      7 * 24 * 60 * 60
+      timeLimit: serverTime - tl_days * 24 * 60 * 60
     };
     say('Transferring control to searchPosts()...');
     await (0, _core.searchPosts)(config, (what, data) => {
@@ -286,13 +284,18 @@ document.addEventListener('DOMContentLoaded', () => {
   uid_div.innerHTML = 'User ID: ';
   const uid_input = document.createElement('input');
   uid_input.setAttribute('type', 'number');
-  uid_input.setAttribute('autofocus', '1');
   uid_input.setAttribute('required', '1');
   const gid_div = document.createElement('div');
   gid_div.innerHTML = 'Group ID: ';
   const gid_input = document.createElement('input');
   gid_input.setAttribute('type', 'number');
   gid_input.setAttribute('required', '1');
+  const tl_div = document.createElement('div');
+  tl_div.innerHTML = 'Time limit (days): ';
+  const tl_input = document.createElement('input');
+  tl_input.setAttribute('type', 'number');
+  tl_input.setAttribute('value', '7');
+  tl_input.setAttribute('required', '1');
   const btn_div = document.createElement('div');
   const btn = document.createElement('input');
   btn.setAttribute('type', 'submit');
@@ -300,7 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
   form.onsubmit = () => {
     const uid = parseInt(uid_input.value);
     const gid = parseInt(gid_input.value);
-    work(uid, gid).then(() => {
+    const tl = parseInt(tl_input.value);
+    work(uid, gid, tl).then(() => {
       say('Done...');
     }); // Do not reload the page!
 
@@ -309,9 +313,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   uid_div.appendChild(uid_input);
   gid_div.appendChild(gid_input);
+  tl_div.appendChild(tl_input);
   btn_div.appendChild(btn);
   form.appendChild(uid_div);
   form.appendChild(gid_div);
+  form.appendChild(tl_div);
   form.appendChild(btn_div);
   body.appendChild(form);
   body.appendChild(logArea);
