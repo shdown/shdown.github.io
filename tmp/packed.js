@@ -47,7 +47,8 @@ async function checkSinglePost(postConfig, config, callback) {
 var offset = 0, brk = false, found = false;
 while (!brk) {
     var posters = API.wall.getComments({owner_id: ${config.oid}, post_id: ${postConfig.postId}, need_likes: 0, count: ${MAX_COMMENTS}, offset: offset, extended: 1});
-    brk = posters.count < ${MAX_COMMENTS};
+    offset = offset + ${MAX_COMMENTS};
+    brk = posters.count >= offset;
     posters = posters.profiles@.id;
     var i = 0;
     while (!found && i < posters.length) {
@@ -57,7 +58,6 @@ while (!brk) {
     if (found) {
         brk = true;
     }
-    offset = offset + ${MAX_COMMENTS};
 }
 return [found];`;
   const result = await config.session.apiRequest('execute', {
@@ -86,9 +86,8 @@ async function checkSinglePostManually(postConfig, config, callback) {
 
     for (const profile of result.profiles) if (profile.id === config.uid) return postConfig.postId;
 
-    console.log(`result.count = ${result.count}`);
-    if (result.count < MAX_COMMENTS) break;
     offset += MAX_COMMENTS;
+    if (result.count >= offset) break;
   }
 
   return null;
