@@ -93,6 +93,29 @@ async function checkSinglePostManually(postConfig, config, callback) {
   return null;
 }
 
+async function checkOneOff(runtimeConfig, config, callback) {
+  callback('check-one-off', runtimeConfig.offset);
+  const result = await config.session.apiRequest('wall.get', {
+    owner_id: config.oid,
+    offset: runtimeConfig.offset,
+    count: 1,
+    v: '5.101'
+  });
+
+  if (result.items.length === 0) {
+    callback('last', 'no-more-posts');
+    return false;
+  }
+
+  const postId = result.items[0].id;
+  const datum = checkSinglePostManually({
+    postId: postId
+  }, config, callback);
+  if (datum !== null) callback('found', datum);
+  runtimeConfig.offset += 1;
+  return true;
+}
+
 async function searchPostsIteration(runtimeConfig, config, callback) {
   callback('offset', runtimeConfig.offset);
   let result;
@@ -107,11 +130,22 @@ async function searchPostsIteration(runtimeConfig, config, callback) {
       callback('ppr', runtimeConfig.postsPerRequest);
       return true;
     } else {
-      throw err;
+      await callback.retrowOrIgnore(err); // try to check the next post manually instead
+
+      try {
+        return await checkOneOff(runtimeConfig, config, callback);
+      } catch (err) {
+        if (!(err instanceof _vk_request.VkApiError)) throw err;
+        await callback.retrowOrIgnore(err); // skip this one
+
+        runtimeConfig.offset += 1;
+        return true;
+      }
     }
   }
 
   const [numTotalPosts, lastDate, tooBigIds, data] = result;
+  callback('last-date', lastDate);
 
   for (const datum of data) {
     callback('found', datum);
@@ -129,22 +163,31 @@ async function searchPostsIteration(runtimeConfig, config, callback) {
       if (!(err instanceof _vk_request.VkApiError)) throw err;
 
       if (err.code === 13 && /too many (operations|api calls)/i.test(err.msg)) {
-        datum = await checkSinglePostManually(postConfig, config, callback);
+        try {
+          datum = await checkSinglePostManually(postConfig, config, callback);
+        } catch (err) {
+          if (!(err instanceof _vk_request.VkApiError)) throw err; // skip this one
+
+          await callback.retrowOrIgnore(err);
+          continue;
+        }
       } else {
-        throw err;
+        // skip this one
+        await callback.retrowOrIgnore(err);
+        continue;
       }
     }
 
-    if (datum) callback('found', datum);
-  }
-
-  if (lastDate <= config.timeLimit) {
-    callback('last', 'time-limit-reached');
-    return false;
+    if (datum !== null) callback('found', datum);
   }
 
   if (numTotalPosts < runtimeConfig.postsPerRequest) {
     callback('last', 'no-more-posts');
+    return false;
+  }
+
+  if (lastDate <= config.timeLimit) {
+    callback('last', 'time-limit-reached');
     return false;
   }
 
@@ -210,6 +253,7 @@ var _algo = require("./algo.js");
 
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
+  const session = new _vk_request.VkApiSession();
   const body = document.getElementsByTagName('body')[0];
   const logArea = document.createElement('div');
 
@@ -252,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function work(uid, gid, tl_days) {
-    const session = new _vk_request.VkApiSession();
     session.setAccessToken((await getAccessToken('')));
     session.setRateLimitCallback(what => {
       say(`We are being too fast (${what})!`);
@@ -299,8 +342,16 @@ document.addEventListener('DOMContentLoaded', () => {
   tl_input.setAttribute('value', '7');
   tl_input.setAttribute('required', '1');
   const btn_div = document.createElement('div');
-  const btn = document.createElement('input');
-  btn.setAttribute('type', 'submit');
+  const submitBtn = document.createElement('input');
+  submitBtn.setAttribute('type', 'submit');
+  const cancelBtn = document.createElement('input');
+  cancelBtn.setAttribute('type', 'button');
+  cancelBtn.setAttribute('value', 'Cancel');
+
+  cancelBtn.onclick = () => {
+    session.cancel();
+    return false;
+  };
 
   form.onsubmit = () => {
     const uid = parseInt(uid_input.value);
@@ -319,7 +370,8 @@ document.addEventListener('DOMContentLoaded', () => {
   uid_div.appendChild(uid_input);
   gid_div.appendChild(gid_input);
   tl_div.appendChild(tl_input);
-  btn_div.appendChild(btn);
+  btn_div.appendChild(submitBtn);
+  btn_div.appendChild(cancelBtn);
   form.appendChild(uid_div);
   form.appendChild(gid_div);
   form.appendChild(tl_div);
@@ -340,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.VkApiSession = exports.VkApiError = exports.vkSendRequest = exports.VkConnectError = exports.VkRequest = void 0;
+exports.VkApiSession = exports.VkApiCancellation = exports.VkApiError = exports.vkSendRequest = exports.VkConnectError = exports.VkRequest = void 0;
 
 var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
 
@@ -435,11 +487,48 @@ const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const API_MIN_DELAY_MILLIS = 0.36 * 1000;
 
+class VkApiCancellation extends Error {
+  constructor() {
+    super('Cancellation');
+    this.name = 'VkApiCancellation';
+  }
+
+}
+
+exports.VkApiCancellation = VkApiCancellation;
+
 class VkApiSession {
   constructor() {
     this.accessToken = null;
     this.rateLimitCallback = null;
     this.lastRequestTimestamp = NaN;
+    this.cancelFlag = false;
+  }
+
+  _maybeThrowForCancel() {
+    if (this.cancelFlag) {
+      this.cancelFlag = false;
+      throw new VkApiCancellation();
+    }
+  }
+
+  async _sleepMillis(ms) {
+    const MAX_LAG = 200;
+
+    while (ms >= MAX_LAG) {
+      this._maybeThrowForCancel();
+
+      await sleepMillis(MAX_LAG);
+      ms -= MAX_LAG;
+    }
+
+    this._maybeThrowForCancel();
+
+    await sleepMillis(ms);
+  }
+
+  cancel() {
+    this.cancelFlag = true;
   }
 
   setAccessToken(accessToken) {
@@ -454,14 +543,17 @@ class VkApiSession {
 
   async _limitRate(what, delayMillis) {
     if (this.rateLimitCallback) this.rateLimitCallback(what);
-    await sleepMillis(delayMillis);
+    await this._sleepMillis(delayMillis);
   }
 
   async _apiRequestNoRateLimit(method, params) {
     if (!this.accessToken) throw 'Access token was not set for this VkApiSession instance';
     const now = monotonicNowMillis();
     const delay = now - this.lastRequestTimestamp;
-    if (delay < API_MIN_DELAY_MILLIS) await sleepMillis(API_MIN_DELAY_MILLIS - delay);
+    if (delay < API_MIN_DELAY_MILLIS) await this._sleepMillis(API_MIN_DELAY_MILLIS - delay);
+
+    this._maybeThrowForCancel();
+
     this.lastRequestTimestamp = monotonicNowMillis();
     let result;
 
