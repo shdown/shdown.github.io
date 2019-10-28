@@ -4,19 +4,9 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.config = void 0;
-const config = {
-  APP_ID: 7184377
-};
-exports.config = config;
-
-},{}],2:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
 exports.searchPosts = searchPosts;
+
+var _vk_request = require("./vk_request.js");
 
 async function checkMultiplePosts(runtimeConfig, config, callback) {
   const code = `\
@@ -94,7 +84,7 @@ async function checkSinglePostManually(postConfig, config, callback) {
       v: '5.101'
     });
 
-    for (let profile of result.profiles) if (profile.id === config.uid) return postConfig.postId;
+    for (const profile of result.profiles) if (profile.id === config.uid) return postConfig.postId;
 
     if (result.count < MAX_COMMENTS) break;
     offset += MAX_COMMENTS;
@@ -110,7 +100,7 @@ async function searchPostsIteration(runtimeConfig, config, callback) {
   try {
     result = await checkMultiplePosts(runtimeConfig, config, callback);
   } catch (err) {
-    if (err.name !== 'VkApiError') throw err;
+    if (!(err instanceof _vk_request.VkApiError)) throw err;
 
     if (err.code === 13 && /too many operations/i.test(err.msg)) {
       runtimeConfig.postsPerRequest = config.pprAdjustFunc(runtimeConfig.postsPerRequest);
@@ -123,11 +113,11 @@ async function searchPostsIteration(runtimeConfig, config, callback) {
 
   const [numTotalPosts, lastDate, tooBigIds, data] = result;
 
-  for (let datum of data) {
+  for (const datum of data) {
     callback('found', datum);
   }
 
-  for (let postId of tooBigIds) {
+  for (const postId of tooBigIds) {
     const postConfig = {
       postId: postId
     };
@@ -136,7 +126,7 @@ async function searchPostsIteration(runtimeConfig, config, callback) {
     try {
       datum = await checkSinglePost(postConfig, config, callback);
     } catch (err) {
-      if (err.name !== 'VkApiError') throw err;
+      if (!(err instanceof _vk_request.VkApiError)) throw err;
 
       if (err.code === 13 && /too many (operations|api calls)/i.test(err.msg)) {
         datum = await checkSinglePostManually(postConfig, config, callback);
@@ -171,6 +161,18 @@ async function searchPosts(config, callback) {
   while (await searchPostsIteration(runtimeConfig, config, callback)) {}
 }
 
+},{"./vk_request.js":6}],2:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.config = void 0;
+const config = {
+  APP_ID: 7184377
+};
+exports.config = config;
+
 },{}],3:[function(require,module,exports){
 "use strict";
 
@@ -204,9 +206,10 @@ var _html_escape = require("./html_escape.js");
 
 var _config = require("./config.js");
 
-var _core = require("./core.js");
+var _algo = require("./algo.js");
 
 document.addEventListener('DOMContentLoaded', () => {
+  new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
   const logArea = document.createElement('div');
 
@@ -233,27 +236,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return line;
   };
 
-  const showError = (what, error) => {
-    return say(`ERROR: ${what}: ${error}`);
-  };
-
   async function getAccessToken(scope) {
     say('Requesting access token...');
     const result = await (0, _vk_request.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
       app_id: _config.config.APP_ID,
       scope: scope
-    }); // TODO: check result.scope?
+    });
 
+    const splitPermissions = s => s ? s.split(',') : [];
+
+    const isSubset = (a, b) => new Set([...a, ...b]).size == new Set(b).size;
+
+    if (!isSubset(splitPermissions(scope), splitPermissions(result.scope))) throw new Error(`Requested scope "${scope}", got "${result.scope}"`);
     return result.access_token;
   }
 
   async function work(uid, gid, tl_days) {
-    say('Calling VKWebAppInit...');
-    await (0, _vk_request.vkSendRequestIgnored)('VKWebAppInit', {});
     const session = new _vk_request.VkApiSession();
     session.setAccessToken((await getAccessToken('')));
-    session.setRateLimitCallback(() => {
-      say('We are being too fast!');
+    session.setRateLimitCallback(what => {
+      say(`We are being too fast (${what})!`);
     });
     say('Getting server time...');
     const [serverTime] = await session.apiRequest('execute', {
@@ -270,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
       timeLimit: serverTime - tl_days * 24 * 60 * 60
     };
     say('Transferring control to searchPosts()...');
-    await (0, _core.searchPosts)(config, (what, data) => {
+    await (0, _algo.searchPosts)(config, (what, data) => {
       if (what === 'found') {
         say(`FOUND: https://vk.com/wall${gid}_${data}`);
       } else {
@@ -303,9 +305,12 @@ document.addEventListener('DOMContentLoaded', () => {
   form.onsubmit = () => {
     const uid = parseInt(uid_input.value);
     const gid = parseInt(gid_input.value);
-    const tl = parseInt(tl_input.value);
+    const tl = parseFloat(tl_input.value);
     work(uid, gid, tl).then(() => {
       say('Done...');
+    }).catch(err => {
+      say(`ERROR: ${err.name}: ${err.message}`);
+      console.log(err);
     }); // Do not reload the page!
 
     return false;
@@ -324,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
   say('Initialized');
 });
 
-},{"./config.js":1,"./core.js":2,"./html_escape.js":3,"./vk_request.js":6}],5:[function(require,module,exports){
+},{"./algo.js":1,"./config.js":2,"./html_escape.js":3,"./vk_request.js":6}],5:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -335,9 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.vkSendRequestIgnored = vkSendRequestIgnored;
-exports.vkSendRequest = vkSendRequest;
-exports.VkApiSession = exports.VkApiError = exports.VkRequest = void 0;
+exports.VkApiSession = exports.VkApiError = exports.vkSendRequest = exports.VkConnectError = exports.VkRequest = void 0;
 
 var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
 
@@ -347,7 +350,7 @@ const methodsByKey = {};
 const requestsByMethod = {};
 
 const doSend = request => {
-  for (let key in request.callbacks) methodsByKey[key] = request.method;
+  for (const key in request.callbacks) methodsByKey[key] = request.method;
 
   requestsByMethod[request.method] = request;
 
@@ -360,7 +363,7 @@ _vkConnect.default.subscribe(event => {
     data
   } = event.detail;
   const method = methodsByKey[type];
-  if (!method) throw `Unknown VK event type: ${type}`;
+  if (!method) throw new Error(`Unknown VK event type: ${type}`);
   const request = requestsByMethod[method];
   if (request.next) doSend(request.next);else delete requestsByMethod[method];
   request.callbacks[type](data);
@@ -394,27 +397,25 @@ class VkRequest {
 
 exports.VkRequest = VkRequest;
 
-function vkSendRequestIgnored(method, params) {
-  return new Promise(resolve => {
-    new VkRequest(method, params).schedule();
-    resolve();
-  });
+class VkConnectError extends Error {
+  constructor(data) {
+    super(JSON.stringify(data));
+    this.name = 'VkConnectError';
+    this.data = data;
+  }
+
 }
 
-function vkSendRequest(method, successKey, failureKey, params) {
+exports.VkConnectError = VkConnectError;
+
+const vkSendRequest = (method, successKey, failureKey, params) => {
   return new Promise((resolve, reject) => {
-    new VkRequest(method, params).on(successKey, resolve).on(failureKey, reject).schedule();
+    new VkRequest(method, params).on(successKey, resolve).on(failureKey, data => reject(new VkConnectError(data))).schedule();
   });
-}
+}; //-----------------------------------------------------------------------------
 
-;
 
-const monotonicNowMillis = () => window.performance.now();
-
-const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-const MIN_DELAY_MILLIS = 0.36 * 1000;
-const SLEEP_ON_RATELIMIT_MILLIS = 3 * 1000;
+exports.vkSendRequest = vkSendRequest;
 
 class VkApiError extends Error {
   constructor(code, msg) {
@@ -428,12 +429,17 @@ class VkApiError extends Error {
 
 exports.VkApiError = VkApiError;
 
+const monotonicNowMillis = () => window.performance.now();
+
+const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const API_MIN_DELAY_MILLIS = 0.36 * 1000;
+
 class VkApiSession {
   constructor() {
     this.accessToken = null;
     this.rateLimitCallback = null;
     this.lastRequestTimestamp = NaN;
-    this.nextRequestId = 1;
   }
 
   setAccessToken(accessToken) {
@@ -446,37 +452,68 @@ class VkApiSession {
     return this;
   }
 
-  async apiRequest(method, params) {
+  async _limitRate(what, delayMillis) {
+    if (this.rateLimitCallback) this.rateLimitCallback(what);
+    await sleepMillis(delayMillis);
+  }
+
+  async _apiRequestNoRateLimit(method, params) {
     if (!this.accessToken) throw 'Access token was not set for this VkApiSession instance';
     const now = monotonicNowMillis();
     const delay = now - this.lastRequestTimestamp;
-    if (delay < MIN_DELAY_MILLIS) await sleepMillis(MIN_DELAY_MILLIS - delay);
+    if (delay < API_MIN_DELAY_MILLIS) await sleepMillis(API_MIN_DELAY_MILLIS - delay);
+    this.lastRequestTimestamp = monotonicNowMillis();
+    let result;
 
-    while (true) {
-      this.lastRequestTimestamp = monotonicNowMillis();
-      const result = await vkSendRequest('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
+    try {
+      result = await vkSendRequest('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
         method: method,
         params: Object.assign({
           access_token: this.accessToken
         }, params),
-        request_id: `${this.nextRequestId++}`
+        request_id: '1'
       });
-      const error = result.error;
+    } catch (err) {
+      if (!(err instanceof VkError)) throw err;
 
-      if (error) {
-        const code = error.error_code;
-        const msg = error.error_msg;
+      if (err.data.error_type === 'client_error') {
+        const reason = err.data.error_data.error_reason;
+        throw new VkApiError(reason.error_code, reason.error_msg);
+      } else {
+        throw err;
+      }
+    }
 
-        if (code === 6) {
-          if (this.rateLimitCallback) this.rateLimitCallback();
-          await sleepMillis(SLEEP_ON_RATELIMIT_MILLIS);
-          continue;
-        } else {
-          throw new VkApiError(code, msg);
+    if (result.error) throw new VkApiError(result.error.error_code, result.error.error_msg);
+    return result.response;
+  }
+
+  async apiRequest(method, params) {
+    while (true) {
+      try {
+        return await this._apiRequestNoRateLimit(method, params);
+      } catch (err) {
+        if (!(err instanceof VkApiError)) throw err; // https://vk.com/dev/errors
+
+        switch (err.code) {
+          case 6:
+            await this._limitRate('rate-limit', 3000);
+            break;
+
+          case 9:
+            // this one was not seen in practice, but still...
+            await this._limitRate('rate-limit-hard', 9000);
+            break;
+
+          case 1:
+          case 10:
+            await this._limitRate('server-unavailable', 1000);
+            break;
+
+          default:
+            throw err;
         }
       }
-
-      return result.response;
     }
   }
 
