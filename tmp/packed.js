@@ -474,7 +474,7 @@ class VkApiSession {
         request_id: '1'
       });
     } catch (err) {
-      if (!(err instanceof VkError)) throw err;
+      if (!(err instanceof VkConnectError)) throw err;
 
       if (err.data.error_type === 'client_error') {
         const reason = err.data.error_data.error_reason;
