@@ -86,6 +86,7 @@ async function checkSinglePostManually(postConfig, config, callback) {
 
     for (const profile of result.profiles) if (profile.id === config.uid) return postConfig.postId;
 
+    console.log(`result.count = ${result.count}`);
     if (result.count < MAX_COMMENTS) break;
     offset += MAX_COMMENTS;
   }
