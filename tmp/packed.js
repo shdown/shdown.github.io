@@ -18,7 +18,7 @@ class ChartController {
 
     for (let i = this.bars.length - 1; i !== -1; --i) {
       const value = this.bars[i];
-      if (0 < value.offset && value.offset < value.total) return i;
+      if (value.offset === 0 || value.offset === value.total) return i;
     }
 
     return null;
@@ -48,6 +48,8 @@ class ChartController {
         this.bars[j] = { ...value
         };
         if (isNew) this.painter.addBar(j, this.bars[j]);else this.painter.alterBar(j, this.bars[j]);
+      } else {
+        console.log(`No place to draw bar for post ID ${value.id}`);
       }
     }
   }
@@ -92,7 +94,9 @@ class ChartPainter {
       type: 'bar',
       data: data,
       options: {
-        //tooltips: {enabled: false},
+        tooltips: {
+          enabled: false
+        },
         legend: {
           display: false
         },
