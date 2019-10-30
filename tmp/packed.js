@@ -4,20 +4,232 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.findPosts = void 0;
+
+var _vk_api = require("./vk_api.js");
+
+class Reader {
+  constructor(config) {
+    this._config = config;
+    this._cache = [];
+    this._cachePos = 0;
+    this._eof = false;
+    this._globalOffset = 0;
+  }
+
+  _setEOF(reason) {
+    if (!this._eof) {
+      this._config.callback('last', reason);
+
+      this._eof = true;
+    }
+  }
+
+  async _repopulateCache() {
+    const MAX_POSTS = 100;
+    const result = await this._config.session.apiRequest('wall.get', {
+      owner_id: this._config.oid,
+      offset: this._globalOffset,
+      count: MAX_POSTS,
+      v: '5.101'
+    }); // Let's explicitly copy the slice — I don't trust modern JS engines not to introduce a
+    // memory leak here.
+
+    const newCache = [...this._cache.slice(this._cachePos)];
+
+    for (const datum of result.items) {
+      if (datum.date < this._config.timeLimit && !datum.is_pinned) {
+        this._setEOF('time-limit');
+
+        break;
+      }
+
+      if (datum.is_pinned && this._config.ignorePinned) continue; //if (datum.marked_as_ads)
+      //    continue;
+
+      const value = {
+        id: datum.id,
+        offset: 0,
+        total: datum.comments.count,
+        date: datum.date
+      };
+
+      if (datum.from_id === this._config.uid) {
+        // TODO pass the datum to the callback
+        this._config.callback('found', {
+          postId: datum.id,
+          commentNo: 0
+        });
+
+        value.offset = value.total;
+      }
+
+      this._config.callback('info', value);
+
+      newCache.push(value);
+    }
+
+    this._config.callback('info-flush');
+
+    this._cache = newCache;
+    this._cachePos = 0;
+    if (result.items.length < MAX_POSTS) this._setEOF('no-more-posts');
+    this._globalOffset += result.items.length;
+  }
+
+  _advance(n) {
+    const values = this._cache.slice(this._cachePos, this._cachePos + n);
+
+    this._cachePos += n;
+    return values;
+  }
+
+  async read(n) {
+    while (true) {
+      const available = this._cache.length - this._cachePos;
+      if (available >= n) return {
+        values: this._advance(n),
+        eof: false
+      };
+      if (this._eof) return {
+        values: this._advance(available),
+        eof: true
+      };
+      await this._repopulateCache();
+    }
+  }
+
+}
+
+class HotGroup {
+  constructor(config, reader, groupSize) {
+    this._config = config;
+    this._hotArray = [];
+    this._eof = false;
+    this._reader = reader;
+    this._groupSize = groupSize;
+  }
+
+  async getCurrent() {
+    while (this._hotArray.length < this._groupSize && !this._eof) {
+      const {
+        values,
+        eof
+      } = await this._reader.read(this._groupSize - this._hotArray.length);
+
+      for (const value of values) {
+        if (value.offset !== value.total) this._hotArray.push(value);
+      }
+
+      this._eof = eof;
+    }
+
+    return this._hotArray;
+  }
+
+  decreaseCurrent(byAmounts) {
+    const newHotArray = [];
+
+    for (let i = 0; i < this._hotArray.length; ++i) {
+      const value = this._hotArray[i];
+      value.offset += byAmounts[i];
+
+      this._config.callback('info', value);
+
+      if (value.offset !== value.total) newHotArray.push(value);
+    }
+
+    this._config.callback('info-flush');
+
+    this._hotArray = newHotArray;
+  }
+
+}
+
+const findPosts = async config => {
+  const MAX_COMMENTS = 100;
+  const MAX_REQUESTS_IN_EXECUTE = 25;
+  const reader = new Reader(config);
+  const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
+
+  while (true) {
+    const hotArray = await hotGroup.getCurrent();
+    if (hotArray.length === 0) break;
+    let code = `var i = 0, r = [];`;
+    code += `var d = [${hotArray.map(value => value.id).join(',')}];`;
+    code += `var o = [${hotArray.map(value => value.offset).join(',')}];`;
+    code += `while (i < ${hotArray.length}) {`;
+    code += ` r.push(API.wall.getComments({`;
+    code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
+    code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
+    code += ` }).profiles@.id);`;
+    code += ` i = i + 1;`;
+    code += `}`;
+    code += `return r;`;
+    let result;
+
+    try {
+      result = await config.session.apiRequest('execute', {
+        code: code,
+        v: '5.101'
+      });
+    } catch (err) {
+      if (!(err instanceof _vk_api.VkApiError)) throw err;
+      await config.rethrowOrIgnore(err); // skip the first one
+
+      const decreaseAmounts = Array(hotArray.length).fill(0);
+      decreaseAmounts[0] = hotArray[0].total - hotArray[0].offset;
+      hotGroup.decreaseCurrent(decreaseAmounts);
+      continue;
+    }
+
+    const decreaseAmounts = Array(hotArray.length);
+
+    for (let i = 0; i < hotArray.length; ++i) {
+      const value = hotArray[i];
+      const posterIds = result[i];
+      const leftToCheck = value.total - value.offset;
+
+      if (posterIds.indexOf(config.uid) !== -1) {
+        // TODO fetch the post manually
+        config.callback('found', {
+          postId: value.id,
+          commentNo: -1
+        });
+        decreaseAmounts[i] = leftToCheck;
+      } else {
+        decreaseAmounts[i] = Math.min(MAX_COMMENTS, leftToCheck);
+      }
+    }
+
+    hotGroup.decreaseCurrent(decreaseAmounts);
+  }
+};
+
+exports.findPosts = findPosts;
+
+},{"./vk_api.js":10}],2:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
 exports.ChartController = void 0;
 
+const copyDatum = value => ({ ...value
+});
+
 class ChartController {
-  constructor(maxBars, painter) {
-    this.maxBars = maxBars;
-    this.painter = painter;
-    this.bars = Array(maxBars).fill(null);
+  constructor(maxBarsNum, painter) {
+    this._painter = painter;
+    this._bars = Array(maxBarsNum).fill(null);
   }
 
   _findVacant() {
-    for (let i = 0; i < this.bars.length; ++i) if (this.bars[i] === null) return i;
+    for (let i = 0; i < this._bars.length; ++i) if (this._bars[i] === null) return i;
 
-    for (let i = this.bars.length - 1; i !== -1; --i) {
-      const value = this.bars[i];
+    for (let i = this._bars.length - 1; i !== -1; --i) {
+      const value = this._bars[i];
       if (value.offset === 0 || value.offset === value.total) return i;
     }
 
@@ -25,8 +237,8 @@ class ChartController {
   }
 
   _findWithId(id) {
-    for (let i = 0; i < this.bars.length; ++i) {
-      const value = this.bars[i];
+    for (let i = 0; i < this._bars.length; ++i) {
+      const value = this._bars[i];
       if (value !== null && value.id === id) return i;
     }
 
@@ -37,17 +249,16 @@ class ChartController {
     const i = this._findWithId(value.id);
 
     if (i !== null) {
-      this.bars[i] = { ...value
-      };
-      this.painter.setBarValue(i, this.bars[i]);
+      this._bars[i] = copyDatum(value);
+
+      this._painter.setBarValue(i, this._bars[i]);
     } else {
       const j = this._findVacant();
 
       if (j !== null) {
-        const isNew = this.bars[j] === null;
-        this.bars[j] = { ...value
-        };
-        if (isNew) this.painter.addBar(j, this.bars[j]);else this.painter.alterBar(j, this.bars[j]);
+        const isNew = this._bars[j] === null;
+        this._bars[j] = copyDatum(value);
+        if (isNew) this._painter.addBar(j, this._bars[j]);else this._painter.alterBar(j, this._bars[j]);
       } else {
         console.log(`No place to draw bar for post ID ${value.id}`);
       }
@@ -55,14 +266,14 @@ class ChartController {
   }
 
   handleFlush() {
-    this.painter.flush();
+    this._painter.flush();
   }
 
 }
 
 exports.ChartController = ChartController;
 
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -72,9 +283,17 @@ exports.ChartPainter = void 0;
 
 var _chart = require("chart.js");
 
+const BG_COLOR = 'rgba(230,230,230,0.3)';
+const FG_COLORS = [// https://mycolor.space/?hex=%234A76A8&sub=1
+'rgba(74,118,168,0.99)', // blue
+'#A45E75', // red
+'#008A5F', // green
+'#C4A270' // brown
+];
+
 class ChartPainter {
   constructor(canvas) {
-    const defaultParams = {
+    const DEFAULT_PARAMS = {
       barPercentage: 1,
       categoryPercentage: 1,
       borderColor: '#333333',
@@ -83,15 +302,19 @@ class ChartPainter {
     };
     const data = {
       labels: [],
-      datasets: [{ ...defaultParams,
+      datasets: [{ ...DEFAULT_PARAMS,
         data: [],
-        backgroundColor: 'rgba(74,118,168,0.99)'
-      }, { ...defaultParams,
+        backgroundColor: []
+        /*'rgba(74,118,168,0.99)'*/
+
+      }, { ...DEFAULT_PARAMS,
         data: [],
-        backgroundColor: 'rgba(230,230,230,0.3)'
+        backgroundColor: []
+        /*'rgba(230,230,230,0.3)'*/
+
       }]
     };
-    this.chart = new _chart.Chart(canvas, {
+    this._chart = new _chart.Chart(canvas, {
       type: 'bar',
       data: data,
       options: {
@@ -114,12 +337,23 @@ class ChartPainter {
         }
       }
     });
+    this._fg_indices = [];
   }
 
-  _update(i, value, updateLabel) {
-    this.chart.data.datasets[0].data[i] = value.offset;
-    this.chart.data.datasets[1].data[i] = value.total - value.offset;
-    if (updateLabel) this.chart.data.labels[i] = `Post ${value.id}`;
+  _nextFgColorFor(i) {
+    this._fg_indices[i] = (this._fg_indices[i] + 1) % FG_COLORS.length;
+    return FG_COLORS[this._fg_indices[i]];
+  }
+
+  _update(i, value, newBar) {
+    this._chart.data.datasets[0].data[i] = value.offset;
+    this._chart.data.datasets[1].data[i] = value.total - value.offset;
+
+    if (newBar) {
+      this._chart.data.labels[i] = `Post ${value.id}`;
+      this._chart.data.datasets[0].backgroundColor[i] = this._nextFgColorFor(i);
+      this._chart.data.datasets[1].backgroundColor[i] = BG_COLOR;
+    }
   }
 
   setBarValue(i, value) {
@@ -127,9 +361,17 @@ class ChartPainter {
   }
 
   addBar(i, value) {
-    this.chart.data.labels.push('');
-    this.chart.data.datasets[0].data.push(1);
-    this.chart.data.datasets[1].data.push(1);
+    this._chart.data.labels.push('');
+
+    this._chart.data.datasets[0].data.push(1);
+
+    this._chart.data.datasets[1].data.push(1);
+
+    this._chart.data.datasets[0].backgroundColor.push('');
+
+    this._chart.data.datasets[1].backgroundColor.push('');
+
+    this._fg_indices.push(-1);
 
     this._update(i, value, true);
   }
@@ -139,14 +381,14 @@ class ChartPainter {
   }
 
   flush() {
-    this.chart.update();
+    this._chart.update();
   }
 
 }
 
 exports.ChartPainter = ChartPainter;
 
-},{"chart.js":7}],3:[function(require,module,exports){
+},{"chart.js":8}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -158,7 +400,7 @@ const config = {
 };
 exports.config = config;
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -182,7 +424,7 @@ const htmlEscape = s => {
 
 exports.htmlEscape = htmlEscape;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 
 var _vk_request = require("./vk_request.js");
@@ -193,7 +435,7 @@ var _html_escape = require("./html_escape.js");
 
 var _config = require("./config.js");
 
-var _yoba = require("./yoba.js");
+var _algo = require("./algo.js");
 
 var _chart_ctl = require("./chart_ctl.js");
 
@@ -203,6 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
   const canvas = document.createElement('canvas');
+  const canvasArea = document.createElement('div');
   const textArea = document.createElement('div');
   const painter = new _chart_painter.ChartPainter(canvas);
   const chartCtl = new _chart_ctl.ChartController(30, painter);
@@ -301,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
     say('Transferring control to findPosts()...');
-    await (0, _yoba.findPosts)(config);
+    await (0, _algo.findPosts)(config);
   };
 
   const form = document.createElement('form');
@@ -368,12 +611,12 @@ document.addEventListener('DOMContentLoaded', () => {
   say('Initialized');
 });
 
-},{"./chart_ctl.js":1,"./chart_painter.js":2,"./config.js":3,"./html_escape.js":4,"./vk_api.js":9,"./vk_request.js":10,"./yoba.js":11}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./html_escape.js":5,"./vk_api.js":10,"./vk_request.js":11}],7:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -15507,7 +15750,7 @@ document.addEventListener('DOMContentLoaded', () => {
   return src;
 });
 
-},{"moment":8}],8:[function(require,module,exports){
+},{"moment":9}],9:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -20111,7 +20354,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })));
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20150,15 +20393,15 @@ const MIN_DELAY_MILLIS = 0.36 * 1000;
 
 class VkApiSession {
   constructor() {
-    this.accessToken = null;
-    this.rateLimitCallback = null;
-    this.lastRequestTimestamp = NaN;
-    this.cancelFlag = false;
+    this._accessToken = null;
+    this._rateLimitCallback = null;
+    this._lastRequestTimestamp = NaN;
+    this._cancelFlag = false;
   }
 
   _maybeThrowForCancel() {
-    if (this.cancelFlag) {
-      this.cancelFlag = false;
+    if (this._cancelFlag) {
+      this._cancelFlag = false;
       throw new VkApiCancellation();
     }
   }
@@ -20179,40 +20422,40 @@ class VkApiSession {
   }
 
   cancel() {
-    this.cancelFlag = true;
+    this._cancelFlag = true;
   }
 
   setAccessToken(accessToken) {
-    this.accessToken = accessToken;
+    this._accessToken = accessToken;
     return this;
   }
 
   setRateLimitCallback(fn) {
-    this.rateLimitCallback = fn;
+    this._rateLimitCallback = fn;
     return this;
   }
 
   async _limitRate(reason, delayMillis) {
-    if (this.rateLimitCallback) this.rateLimitCallback(reason);
+    if (this._rateLimitCallback) this._rateLimitCallback(reason);
     await this._sleepMillis(delayMillis);
   }
 
   async _apiRequestNoRateLimit(method, params) {
-    if (!this.accessToken) throw 'Access token was not set for this VkApiSession instance';
+    if (this._accessToken === null) throw 'Access token was not set for this VkApiSession instance';
     const now = monotonicNowMillis();
-    const delay = now - this.lastRequestTimestamp;
+    const delay = now - this._lastRequestTimestamp;
     if (delay < MIN_DELAY_MILLIS) await this._sleepMillis(MIN_DELAY_MILLIS - delay);
 
     this._maybeThrowForCancel();
 
-    this.lastRequestTimestamp = monotonicNowMillis();
+    this._lastRequestTimestamp = monotonicNowMillis();
     let result;
 
     try {
       result = await (0, _vk_request.vkSendRequest)('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
         method: method,
         params: { ...params,
-          access_token: this.accessToken
+          access_token: this._accessToken
         },
         request_id: '1'
       });
@@ -20264,7 +20507,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./vk_request.js":10}],10:[function(require,module,exports){
+},{"./vk_request.js":11}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20346,197 +20589,4 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":6}],11:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.findPosts = void 0;
-
-var _vk_api = require("./vk_api.js");
-
-class Reader {
-  constructor(config) {
-    this.config = config;
-    this.cache = [];
-    this.cachePos = 0;
-    this.eof = false;
-    this.globalOffset = 0;
-  }
-
-  _setEOF(reason) {
-    if (!this.eof) {
-      this.config.callback('last', reason);
-      this.eof = true;
-    }
-  }
-
-  async _repopulateCache() {
-    const MAX_POSTS = 100;
-    const result = await this.config.session.apiRequest('wall.get', {
-      owner_id: this.config.oid,
-      offset: this.globalOffset,
-      count: MAX_POSTS,
-      v: '5.101'
-    });
-    const newCache = [...this.cache.slice(this.cachePos)];
-
-    for (const datum of result.items) {
-      if (datum.date < this.config.timeLimit && !datum.is_pinned) {
-        this._setEOF('time-limit');
-
-        break;
-      }
-
-      if (datum.is_pinned && this.config.ignorePinned) continue; //if (datum.marked_as_ads)
-      //    continue;
-
-      const value = {
-        id: datum.id,
-        offset: 0,
-        total: datum.comments.count,
-        date: datum.date
-      };
-
-      if (datum.from_id === this.config.uid) {
-        // TODO pass the datum to the callback
-        this.config.callback('found', {
-          postId: datum.id,
-          commentNo: 0
-        });
-        value.offset = value.total;
-      }
-
-      this.config.callback('info', value);
-      newCache.push(value);
-    }
-
-    this.config.callback('info-flush');
-    this.cache = newCache;
-    this.cachePos = 0;
-    if (result.items.length < MAX_POSTS) this._setEOF('no-more-posts');
-    this.globalOffset += result.items.length;
-  }
-
-  _advance(n) {
-    const values = this.cache.slice(this.cachePos, this.cachePos + n);
-    this.cachePos += n;
-    return values;
-  }
-
-  async read(n) {
-    while (true) {
-      const available = this.cache.length - this.cachePos;
-      if (available >= n) return {
-        values: this._advance(n),
-        eof: false
-      };
-      if (this.eof) return {
-        values: this._advance(available),
-        eof: true
-      };
-      await this._repopulateCache();
-    }
-  }
-
-}
-
-class HotGroup {
-  constructor(config, reader, groupSize) {
-    this.config = config;
-    this.hotArray = [];
-    this.eof = false;
-    this.reader = reader;
-    this.groupSize = groupSize;
-  }
-
-  async getHotGroup() {
-    while (this.hotArray.length < this.groupSize && !this.eof) {
-      const {
-        values,
-        eof
-      } = await this.reader.read(this.groupSize - this.hotArray.length);
-
-      for (const value of values) {
-        if (value.offset !== value.total) this.hotArray.push(value);
-      }
-
-      this.eof = eof;
-    }
-
-    return this.hotArray;
-  }
-
-  setHotGroup(values) {
-    this.hotArray = [];
-
-    for (const value of values) {
-      this.config.callback('info', value);
-      if (value.offset !== value.total) this.hotArray.push(value);
-    }
-
-    this.config.callback('info-flush');
-  }
-
-}
-
-const findPosts = async config => {
-  const MAX_COMMENTS = 100;
-  const MAX_REQUESTS_IN_EXECUTE = 25;
-  const reader = new Reader(config);
-  const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
-
-  while (true) {
-    const hotArray = await hotGroup.getHotGroup();
-    if (hotArray.length === 0) break;
-    let code = `var i = 0, r = [];`;
-    code += `var d = [${hotArray.map(value => value.id).join(',')}];`;
-    code += `var o = [${hotArray.map(value => value.offset).join(',')}];`;
-    code += `while (i < ${hotArray.length}) {`;
-    code += ` r.push(API.wall.getComments({`;
-    code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
-    code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
-    code += ` }).profiles@.id);`;
-    code += ` i = i + 1;`;
-    code += `}`;
-    code += `return r;`;
-    let result;
-
-    try {
-      result = await config.session.apiRequest('execute', {
-        code: code,
-        v: '5.101'
-      });
-    } catch (err) {
-      if (!(err instanceof _vk_api.VkApiError)) throw err;
-      await config.rethrowOrIgnore(err); // skip the first one
-
-      hotArray[0].offset = hotArray[0].total;
-      hotGroup.setHotGroup(hotArray);
-      continue;
-    }
-
-    for (let i = 0; i < hotArray.length; ++i) {
-      const value = hotArray[i];
-      const posterIds = result[i];
-
-      if (posterIds.indexOf(config.uid) !== -1) {
-        // TODO fetch the post manually
-        config.callback('found', {
-          postId: value.id,
-          commentNo: -1
-        });
-        value.offset = value.total;
-      } else {
-        value.offset = Math.min(value.offset + MAX_COMMENTS, value.total);
-      }
-    }
-
-    hotGroup.setHotGroup(hotArray);
-  }
-};
-
-exports.findPosts = findPosts;
-
-},{"./vk_api.js":9}]},{},[5]);
+},{"@vkontakte/vk-connect":7}]},{},[6]);
