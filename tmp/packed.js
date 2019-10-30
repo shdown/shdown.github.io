@@ -37,9 +37,9 @@ class ChartController {
     const i = this._findWithId(value.id);
 
     if (i !== null) {
-      this.painter.setBarValue(i, this.bars[i]);
       this.bars[i] = { ...value
       };
+      this.painter.setBarValue(i, this.bars[i]);
     } else {
       const j = this._findVacant();
 
