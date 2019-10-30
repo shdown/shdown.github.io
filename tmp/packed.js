@@ -44,6 +44,10 @@ class ChartController {
             }
         }
     }
+
+    handleFlush() {
+        this.painter.flush();
+    }
 }
 
 },{}],2:[function(require,module,exports){
@@ -51,42 +55,76 @@ class ChartController {
 
 var _chart = require("chart.js");
 
-class ChartPainter {} //var myChart = new Chart(ctx, {
-//    type: 'bar',
-//    data: {
-//        labels: ['Red', 'Blue', 'Yellow', 'Green', 'Purple', 'Orange'],
-//        datasets: [{
-//            label: '# of Votes',
-//            data: [12, 19, 3, 5, 2, 3],
-//            backgroundColor: [
-//                'rgba(255, 99, 132, 0.2)',
-//                'rgba(54, 162, 235, 0.2)',
-//                'rgba(255, 206, 86, 0.2)',
-//                'rgba(75, 192, 192, 0.2)',
-//                'rgba(153, 102, 255, 0.2)',
-//                'rgba(255, 159, 64, 0.2)'
-//            ],
-//            borderColor: [
-//                'rgba(255, 99, 132, 1)',
-//                'rgba(54, 162, 235, 1)',
-//                'rgba(255, 206, 86, 1)',
-//                'rgba(75, 192, 192, 1)',
-//                'rgba(153, 102, 255, 1)',
-//                'rgba(255, 159, 64, 1)'
-//            ],
-//            borderWidth: 1
-//        }]
-//    },
-//    options: {
-//        scales: {
-//            yAxes: [{
-//                ticks: {
-//                    beginAtZero: true
-//                }
-//            }]
-//        }
-//    }
-//});
+class ChartPainter {
+  constructor(canvas) {
+    const defaultParams = {
+      barPercentage: 1,
+      categoryPercentage: 1,
+      data: [],
+      borderColor: '#333333',
+      borderWidth: 1,
+      maxBarThickness: 20
+    };
+    const data = {
+      labels: [],
+      datasets: [{ ...defaultParams,
+        backgroundColor: 'rgba(74,118,168,0.99)'
+      }, { ...defaultParams,
+        backgroundColor: 'rgba(230,230,230,0.3)'
+      }]
+    };
+    this.chart = new _chart.Chart(canvas, {
+      type: 'bar',
+      data: data,
+      options: {
+        tooltips: {
+          enabled: false
+        },
+        legend: {
+          display: false
+        },
+        scales: {
+          yAxes: [{
+            ticks: {
+              beginAtZero: true
+            },
+            stacked: true
+          }],
+          xAxes: [{
+            stacked: true
+          }]
+        }
+      }
+    });
+  }
+
+  _update(i, value, updateLabel) {
+    this.chart.data.datasets[0].data[i] = value.offset;
+    this.chart.data.datasets[1].data[i] = value.total - value.offset;
+    if (updateLabel) this.chart.labels[i] = `Post ${value.id}`;
+  }
+
+  setBarValue(i, value) {
+    this._update(i, value, false);
+  }
+
+  addBar(i, value) {
+    this.chart.labels.push('');
+    this.chart.data.datasets[0].push(1);
+    this.chart.data.datasets[1].push(1);
+
+    _update(i, value, true);
+  }
+
+  alterBar(i, value) {
+    _update(i, value, true);
+  }
+
+  flush() {
+    this.chart.update();
+  }
+
+}
 
 },{"chart.js":7}],3:[function(require,module,exports){
 "use strict";
@@ -20322,6 +20360,7 @@ class Reader {
       newCache.push(value);
     }
 
+    this.config.callback('info-flush');
     this.cache = newCache;
     this.cachePos = 0;
     if (result.items.length < MAX_POSTS) this._setEOF('no-more-posts');
@@ -20384,6 +20423,8 @@ class HotGroup {
       this.config.callback('info', value);
       if (value.offset !== value.total) this.hotArray.push(value);
     }
+
+    this.config.callback('info-flush');
   }
 
 }
