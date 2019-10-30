@@ -203,9 +203,29 @@ document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
   const canvas = document.createElement('canvas');
+  const textArea = document.createElement('div');
   const painter = new _chart_painter.ChartPainter(canvas);
   const chartCtl = new _chart_ctl.ChartController(30, painter);
-  const session = new _vk_api.VkApiSession(); //const logArea = document.createElement('div');
+  const session = new _vk_api.VkApiSession();
+
+  const setMode = mode => {
+    switch (mode) {
+      case 'canvas':
+        canvas.style.display = 'block';
+        textArea.style.display = 'none';
+        break;
+
+      case 'text':
+        canvas.style.display = 'none';
+        textArea.style.display = 'block';
+        break;
+
+      default:
+        throw `unknown mode "${mode}"`;
+    }
+  };
+
+  setMode('canvas'); //const logArea = document.createElement('div');
   //const resetLogArea = () => {
   //    logArea.innerHTML = '<hr/><b>Log area:</b>';
   //    const clearBtn = document.createElement('input');
@@ -317,11 +337,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const uid = parseInt(uid_input.value);
     const gid = parseInt(gid_input.value);
     const tl = parseFloat(tl_input.value);
+    setMode('canvas');
     work(uid, gid, tl).then(() => {
       say('Done...');
+      setMode('text');
+      textArea.innerHTML = 'Done…';
     }).catch(err => {
       // TODO check if it's cancellation
-      say(`ERROR: ${err.name}: ${err.message}`);
+      say('Error...');
+      setMode('text');
+      textArea.innerHTML = (0, _html_escape.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
       console.log(err);
     }); // Do not reload the page!
 
@@ -339,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
   form.appendChild(btn_div);
   body.appendChild(form);
   body.appendChild(canvas);
+  body.appendChild(textArea);
   say('Initialized');
 });
 
