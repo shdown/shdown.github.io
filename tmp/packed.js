@@ -558,15 +558,16 @@ const sortItOut = async config => {
   while (true) {
     const hotArray = await hotGroup.getHotGroup();
     if (hotArray.length === 0) break;
-    let code = `var r = [];`;
-
-    for (const value of hotArray) {
-      code += `r.push(API.wall.getComments({`;
-      code += `  owner_id: ${config.oid}, post_id: ${value.id}, count: ${MAX_COMMENTS},`;
-      code += `  offset: ${value.offset}, need_likes: 0, extended: 1, thread_items_count: 10`;
-      code += `}).profiles@.id);`;
-    }
-
+    let code = `var i = 0, r = [];`;
+    code += `var d = [${hotArray.map(value => value.id).join(',')}];`;
+    code += `var o = [${hotArray.map(value => value.offset).join(',')}];`;
+    code += `while (i < ${hotArray.length}) {`;
+    code += ` r.push(API.wall.getComments({`;
+    code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
+    code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
+    code += ` }).profiles@.id);`;
+    code += ` i = i + 1;`;
+    code += `}`;
     code += `return r;`;
     let result;
 
