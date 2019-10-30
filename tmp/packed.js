@@ -1,57 +1,72 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ChartController = void 0;
+
 class ChartController {
-    constructor(maxBars, painter) {
-        this.maxBars = maxBars;
-        this.painter = painter;
-        this.bars = Array(maxBars).fill(null);
+  constructor(maxBars, painter) {
+    this.maxBars = maxBars;
+    this.painter = painter;
+    this.bars = Array(maxBars).fill(null);
+  }
+
+  _findVacant() {
+    for (let i = 0; i < this.bars.length; ++i) if (this.bars[i] === null) return i;
+
+    for (let i = this.bars.length - 1; i !== -1; --i) {
+      const value = this.bars[i];
+      if (0 < value.offset && value.offset < value.total) return i;
     }
 
-    _findVacant() {
-        for (let i = 0; i < this.bars.length; ++i)
-            if (this.bars[i] === null)
-                return i;
-        for (let i = this.bars.length - 1; i !== -1; --i) {
-            const value = this.bars[i];
-            if (0 < value.offset && value.offset < value.total)
-                return i;
-        }
-        return null;
+    return null;
+  }
+
+  _findWithId(id) {
+    for (let i = 0; i < this.bars.length; ++i) {
+      const value = this.bars[i];
+      if (value !== null && value.id === id) return i;
     }
 
-    _findWithId(id) {
-        for (let i = 0; i < this.bars.length; ++i) {
-            const value = this.bars[i];
-            if (value !== null && value.id === id)
-                return i;
-        }
-        return null;
-    }
+    return null;
+  }
 
-    handleUpdate(value) {
-        const i = this._findWithId(value.id);
-        if (i !== null) {
-            this.painter.setBarValue(i, this.bars[i]);
-            this.bars[i] = {...value};
-        } else {
-            const j = this._findVacant();
-            if (j !== null) {
-                const isNew = this.bars[j] === null;
-                this.bars[j] = {...value};
-                if (isNew)
-                    this.painter.addBar(j, this.bars[j]);
-                else
-                    this.painter.alterBar(j, this.bars[j]);
-            }
-        }
-    }
+  handleUpdate(value) {
+    const i = this._findWithId(value.id);
 
-    handleFlush() {
-        this.painter.flush();
+    if (i !== null) {
+      this.painter.setBarValue(i, this.bars[i]);
+      this.bars[i] = { ...value
+      };
+    } else {
+      const j = this._findVacant();
+
+      if (j !== null) {
+        const isNew = this.bars[j] === null;
+        this.bars[j] = { ...value
+        };
+        if (isNew) this.painter.addBar(j, this.bars[j]);else this.painter.alterBar(j, this.bars[j]);
+      }
     }
+  }
+
+  handleFlush() {
+    this.painter.flush();
+  }
+
 }
+
+exports.ChartController = ChartController;
 
 },{}],2:[function(require,module,exports){
 "use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ChartPainter = void 0;
 
 var _chart = require("chart.js");
 
@@ -125,6 +140,8 @@ class ChartPainter {
   }
 
 }
+
+exports.ChartPainter = ChartPainter;
 
 },{"chart.js":7}],3:[function(require,module,exports){
 "use strict";
