@@ -439,13 +439,6 @@ class Reader {
     this.globalOffset = 0;
   }
 
-  _setEOF(reason) {
-    if (!this.eof) {
-      this.config.callback('last', reason);
-      this.eof = true;
-    }
-  }
-
   async _repopulateCache() {
     const MAX_POSTS = 100;
     const result = await this.config.session.apiRequest('wall.get', {
@@ -454,13 +447,13 @@ class Reader {
       count: MAX_POSTS,
       v: '5.101'
     });
+    let timeLimit = false;
     const newCache = [...this.cache.slice(this.cachePos)];
 
     for (const datum of result.items) {
       if (datum.date < this.config.timeLimit) {
-        this._setEOF('time-limit');
-
-        break;
+        timeLimit = true;
+        continue;
       }
 
       if (datum.from_id === this.config.uid) {
@@ -483,7 +476,15 @@ class Reader {
 
     this.cache = newCache;
     this.cachePos = 0;
-    if (result.items.length < MAX_POSTS) this._setEOF('no-more-posts');
+
+    if (timeLimit) {
+      this.eof = true;
+      this.config.callback('last', 'time-limit');
+    } else if (result.items.length < MAX_POSTS) {
+      this.eof = true;
+      this.config.callback('last', 'no-more-posts');
+    }
+
     this.globalOffset += result.items.length;
   }
 
