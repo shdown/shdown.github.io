@@ -449,7 +449,7 @@ class Reader {
   async _repopulateCache() {
     const MAX_POSTS = 100;
     const result = await this.config.session.apiRequest('wall.get', {
-      owner_id: config.oid,
+      owner_id: this.config.oid,
       offset: this.globalOffset,
       count: MAX_POSTS,
       v: '5.101'
@@ -463,7 +463,7 @@ class Reader {
         break;
       }
 
-      if (datum.from_id === config.uid) {
+      if (datum.from_id === this.config.uid) {
         // TODO pass the datum to the callback
         this.config.callback('found', {
           postId: datum.id,
@@ -552,10 +552,10 @@ const sortItOut = async config => {
   const MAX_COMMENTS = 100;
   const MAX_REQUESTS_IN_EXECUTE = 25;
   const reader = new Reader(config);
-  const hotGroup = new HotGroup(reader, MAX_REQUESTS_IN_EXECUTE);
+  const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
 
   while (true) {
-    const hotArray = hotGroup.getHotGroup();
+    const hotArray = await hotGroup.getHotGroup();
     if (hotArray.length === 0) break;
     let code = `var r = [];`;
 
