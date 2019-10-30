@@ -77,7 +77,6 @@ class ChartPainter {
     const defaultParams = {
       barPercentage: 1,
       categoryPercentage: 1,
-      data: [],
       borderColor: '#333333',
       borderWidth: 1,
       maxBarThickness: 20
@@ -85,8 +84,10 @@ class ChartPainter {
     const data = {
       labels: [],
       datasets: [{ ...defaultParams,
+        data: [],
         backgroundColor: 'rgba(74,118,168,0.99)'
       }, { ...defaultParams,
+        data: [],
         backgroundColor: 'rgba(230,230,230,0.3)'
       }]
     };
@@ -258,6 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // TODO
         throw err;
       },
+      ignorePinned: false,
       callback: (what, datum) => {
         switch (what) {
           case 'found':
@@ -20359,9 +20361,10 @@ class Reader {
         this._setEOF('time-limit');
 
         break;
-      } //if (datum.marked_as_ads)
-      //    continue;
+      }
 
+      if (datum.is_pinned && this.config.ignorePinned) continue; //if (datum.marked_as_ads)
+      //    continue;
 
       const value = {
         id: datum.id,
