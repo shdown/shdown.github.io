@@ -116,7 +116,7 @@ class ChartPainter {
   _update(i, value, updateLabel) {
     this.chart.data.datasets[0].data[i] = value.offset;
     this.chart.data.datasets[1].data[i] = value.total - value.offset;
-    if (updateLabel) this.chart.labels[i] = `Post ${value.id}`;
+    if (updateLabel) this.chart.data.labels[i] = `Post ${value.id}`;
   }
 
   setBarValue(i, value) {
@@ -124,15 +124,15 @@ class ChartPainter {
   }
 
   addBar(i, value) {
-    this.chart.labels.push('');
-    this.chart.data.datasets[0].push(1);
-    this.chart.data.datasets[1].push(1);
+    this.chart.data.labels.push('');
+    this.chart.data.datasets[0].data.push(1);
+    this.chart.data.datasets[1].data.push(1);
 
-    _update(i, value, true);
+    this._update(i, value, true);
   }
 
   alterBar(i, value) {
-    _update(i, value, true);
+    this._update(i, value, true);
   }
 
   flush() {
@@ -264,6 +264,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
           case 'info':
             chartCtl.handleUpdate(datum);
+            break;
+
+          case 'info-flush':
+            chartCtl.handleFlush();
             break;
 
           default:
