@@ -423,6 +423,11 @@ exports.vkSendRequest = vkSendRequest;
 },{"@vkontakte/vk-connect":4}],7:[function(require,module,exports){
 "use strict";
 
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.sortItOut = void 0;
+
 var _vk_api = require("./vk_api.js");
 
 class Reader {
@@ -597,5 +602,7 @@ const sortItOut = async config => {
     hotGroup.setHotGroup(hotArray);
   }
 };
+
+exports.sortItOut = sortItOut;
 
 },{"./vk_api.js":5}]},{},[3]);
