@@ -92,9 +92,7 @@ class ChartPainter {
       type: 'bar',
       data: data,
       options: {
-        tooltips: {
-          enabled: false
-        },
+        //tooltips: {enabled: false},
         legend: {
           display: false
         },
