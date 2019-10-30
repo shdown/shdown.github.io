@@ -4,241 +4,13 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.searchPosts = void 0;
-
-var _vk_api = require("./vk_api.js");
-
-const checkMultiplePosts = async (runtimeConfig, config, callback) => {
-  const code = `\
-var posts = API.wall.get({owner_id: ${config.oid}, offset: ${runtimeConfig.offset}, count: ${runtimeConfig.postsPerRequest}}).items;
-if (posts.length == 0) {
-    return [0, -1, [], []];
-}
-var too_big = [], result = [];
-var i = 0;
-while (i < posts.length) {
-    if (posts[i].from_id == ${config.uid}) {
-        result.push(posts[i].id);
-        result.push(0);
-    }
-    var posters = API.wall.getComments({owner_id: ${config.oid}, post_id: posts[i].id, need_likes: 0, count: ${config.commentsPerRequest}, extended: 1, thread_items_count: 10}).profiles@.id;
-    var j = 0, found = false;
-    while (!found && j < posters.length) {
-        found = posters[j] == ${config.uid};
-        j = j + 1;
-    }
-    if (found) {
-        result.push(posts[i].id);
-        result.push(j);
-    } else {
-        if (posts[i].comments.count > ${config.commentsPerRequest}) {
-            too_big.push(posts[i].id);
-        }
-    }
-    i = i + 1;
-}
-return [posts.length, posts[posts.length-1].date, too_big, result];`;
-  return await config.session.apiRequest('execute', {
-    code: code,
-    v: '5.101'
-  });
-};
-
-const checkSinglePost = async (postConfig, config, callback) => {
-  callback('single-post-with-execute', postConfig.postId);
-  const MAX_COMMENTS = 1000;
-  const code = `\
-var offset = 0, brk = false, found = false, result = 0;
-while (!brk) {
-    var posters = API.wall.getComments({owner_id: ${config.oid}, post_id: ${postConfig.postId}, need_likes: 0, count: ${MAX_COMMENTS}, offset: offset, extended: 1});
-    offset = offset + ${MAX_COMMENTS};
-    brk = offset >= posters.count;
-    posters = posters.profiles@.id;
-    var i = 0;
-    while (!found && i < posters.length) {
-        found = posters[i] == ${config.uid};
-        i = i + 1;
-    }
-    if (found) {
-        brk = true;
-        result = i;
-    }
-}
-return [result];`;
-  const result = await config.session.apiRequest('execute', {
-    code: code,
-    v: '5.101'
-  });
-  return result[0] ? {
-    postId: postConfig.postId,
-    commentNo: result[0]
-  } : null;
-};
-
-const checkSinglePostManually = async (postConfig, config, callback) => {
-  callback('single-post-manually', postConfig.postId);
-  const MAX_COMMENTS = 100;
-  let offset = 0;
-
-  while (true) {
-    const result = await config.session.apiRequest('wall.getComments', {
-      owner_id: config.oid,
-      thread_items_count: 10,
-      post_id: postConfig.postId,
-      need_likes: 0,
-      count: MAX_COMMENTS,
-      offset: offset,
-      extended: 1,
-      v: '5.101'
-    });
-
-    for (let i = 0; i < result.profiles.length; ++i) if (result.profiles[i].id === config.uid) return {
-      postId: postConfig.postId,
-      commentNo: offset + i + 1
-    };
-
-    offset += MAX_COMMENTS;
-    if (offset >= result.count) break;
-  }
-
-  return null;
-};
-
-const searchOneOff = async (runtimeConfig, config, callback) => {
-  callback('check-one-off', runtimeConfig.offset);
-  const result = await config.session.apiRequest('wall.get', {
-    owner_id: config.oid,
-    offset: runtimeConfig.offset,
-    count: 1,
-    v: '5.101'
-  });
-
-  if (result.items.length === 0) {
-    callback('last', 'no-more-posts');
-    return false;
-  }
-
-  if (result.items[0].from_id === config.uid) {
-    callback('found', {
-      postId: postId,
-      commentNo: 0
-    });
-  } else {
-    const postId = result.items[0].id;
-    const datum = checkSinglePostManually({
-      postId: postId
-    }, config, callback);
-    if (datum !== null) callback('found', datum);
-  }
-
-  runtimeConfig.offset += 1;
-  return true;
-};
-
-const searchPostsIteration = async (runtimeConfig, config, callback) => {
-  callback('offset', runtimeConfig.offset);
-  let result;
-
-  try {
-    result = await checkMultiplePosts(runtimeConfig, config, callback);
-  } catch (err) {
-    if (!(err instanceof _vk_api.VkApiError)) throw err;
-
-    if (err.code === 13 && /too many operations/i.test(err.msg)) {
-      runtimeConfig.postsPerRequest = config.pprAdjustFunc(runtimeConfig.postsPerRequest);
-      callback('ppr', runtimeConfig.postsPerRequest);
-      return true;
-    } else {
-      await callback.retrowOrIgnore(err); // try to check the next post manually instead
-
-      try {
-        return await checkOneOff(runtimeConfig, config, callback);
-      } catch (err) {
-        if (!(err instanceof _vk_api.VkApiError)) throw err;
-        await callback.retrowOrIgnore(err); // skip this one
-
-        runtimeConfig.offset += 1;
-        return true;
-      }
-    }
-  }
-
-  const [numTotalPosts, lastDate, tooBigIds, data] = result;
-  callback('last-date', lastDate);
-
-  for (let i = 0; i < data.length; i += 2) callback('found', {
-    postId: data[i],
-    commentNo: data[i + 1]
-  });
-
-  for (const postId of tooBigIds) {
-    const postConfig = {
-      postId: postId
-    };
-    let datum;
-
-    try {
-      datum = await checkSinglePost(postConfig, config, callback);
-    } catch (err) {
-      if (!(err instanceof _vk_api.VkApiError)) throw err;
-
-      if (err.code === 13 && /too many (operations|api calls)/i.test(err.msg)) {
-        try {
-          datum = await checkSinglePostManually(postConfig, config, callback);
-        } catch (err) {
-          if (!(err instanceof _vk_api.VkApiError)) throw err; // skip this one
-
-          await callback.retrowOrIgnore(err);
-          continue;
-        }
-      } else {
-        // skip this one
-        await callback.retrowOrIgnore(err);
-        continue;
-      }
-    }
-
-    if (datum !== null) callback('found', datum);
-  }
-
-  if (numTotalPosts < runtimeConfig.postsPerRequest) {
-    callback('last', 'no-more-posts');
-    return false;
-  }
-
-  if (lastDate <= config.timeLimit) {
-    callback('last', 'time-limit-reached');
-    return false;
-  }
-
-  runtimeConfig.offset += runtimeConfig.postsPerRequest;
-  return true;
-};
-
-const searchPosts = async (config, callback) => {
-  const runtimeConfig = {
-    offset: 0,
-    postsPerRequest: config.pprInitial
-  };
-
-  while (await searchPostsIteration(runtimeConfig, config, callback)) {}
-};
-
-exports.searchPosts = searchPosts;
-
-},{"./vk_api.js":6}],2:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
 exports.config = void 0;
 const config = {
   APP_ID: 7184377
 };
 exports.config = config;
 
-},{}],3:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -262,7 +34,7 @@ const htmlEscape = s => {
 
 exports.htmlEscape = htmlEscape;
 
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 "use strict";
 
 var _vk_request = require("./vk_request.js");
@@ -273,7 +45,7 @@ var _html_escape = require("./html_escape.js");
 
 var _config = require("./config.js");
 
-var _algo = require("./algo.js");
+var _yoba = require("./yoba.js");
 
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
@@ -319,10 +91,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return result.access_token;
   };
 
-  const work = async (uid, gid, tl_days) => {
+  const work = async (uid, gid, timeLimitDays) => {
     session.setAccessToken((await getAccessToken('')));
-    session.setRateLimitCallback(what => {
-      say(`We are being too fast (${what})!`);
+    session.setRateLimitCallback(reason => {
+      say(`We are being too fast (${reason})!`);
     });
     say('Getting server time...');
     const [serverTime] = await session.apiRequest('execute', {
@@ -333,23 +105,21 @@ document.addEventListener('DOMContentLoaded', () => {
       session: session,
       oid: gid,
       uid: uid,
-      commentsPerRequest: 150,
-      pprInitial: 24,
-      pprAdjustFunc: n => Math.max(1, n - 2),
-      timeLimit: serverTime - tl_days * 24 * 60 * 60,
+      timeLimit: serverTime - timeLimitDays * 24 * 60 * 60,
       rethrowOrIgnore: async err => {
         // TODO
         throw err;
+      },
+      callback: (what, datum) => {
+        if (what === 'found') {
+          say(`FOUND: https://vk.com/wall${gid}_${datum.postId}`);
+        } else {
+          say(`callback: ${what}: ${JSON.stringify(datum)}`);
+        }
       }
     };
-    say('Transferring control to searchPosts()...');
-    await (0, _algo.searchPosts)(config, (what, data) => {
-      if (what === 'found') {
-        say(`FOUND: https://vk.com/wall${gid}_${data.postId} (comment ${data.commentNo})`);
-      } else {
-        say(`callback: ${what}: ${data}`);
-      }
-    });
+    say('Transferring control to sortItOut()...');
+    await (0, _yoba.sortItOut)(config);
   };
 
   const form = document.createElement('form');
@@ -410,12 +180,12 @@ document.addEventListener('DOMContentLoaded', () => {
   say('Initialized');
 });
 
-},{"./algo.js":1,"./config.js":2,"./html_escape.js":3,"./vk_api.js":6,"./vk_request.js":7}],5:[function(require,module,exports){
+},{"./config.js":1,"./html_escape.js":2,"./vk_api.js":5,"./vk_request.js":6,"./yoba.js":7}],4:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],6:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -496,8 +266,8 @@ class VkApiSession {
     return this;
   }
 
-  async _limitRate(what, delayMillis) {
-    if (this.rateLimitCallback) this.rateLimitCallback(what);
+  async _limitRate(reason, delayMillis) {
+    if (this.rateLimitCallback) this.rateLimitCallback(reason);
     await this._sleepMillis(delayMillis);
   }
 
@@ -568,7 +338,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./vk_request.js":7}],7:[function(require,module,exports){
+},{"./vk_request.js":6}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -650,4 +420,182 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":5}]},{},[4]);
+},{"@vkontakte/vk-connect":4}],7:[function(require,module,exports){
+"use strict";
+
+var _vk_api = require("./vk_api.js");
+
+class Reader {
+  constructor(config) {
+    this.config = config;
+    this.cache = [];
+    this.cachePos = 0;
+    this.eof = false;
+    this.globalOffset = 0;
+  }
+
+  _setEOF(reason) {
+    if (!this.eof) {
+      this.config.callback('last', reason);
+      this.eof = true;
+    }
+  }
+
+  async _repopulateCache() {
+    const MAX_POSTS = 100;
+    const result = await this.config.session.apiRequest('wall.get', {
+      owner_id: config.oid,
+      offset: this.globalOffset,
+      count: MAX_POSTS,
+      v: '5.101'
+    });
+    const newCache = [...this.cache.slice(this.cachePos)];
+
+    for (const datum of result.items) {
+      if (datum.date < this.config.timeLimit) {
+        this._setEOF('time-limit');
+
+        break;
+      }
+
+      if (datum.from_id === config.uid) {
+        // TODO pass the datum to the callback
+        this.config.callback('found', {
+          postId: datum.id,
+          commentNo: 0
+        });
+        continue;
+      } //if (datum.marked_as_ads)
+      //    continue;
+
+
+      newCache.push({
+        id: datum.id,
+        offset: 0,
+        total: datum.comments.count
+      });
+    }
+
+    this.cache = newCache;
+    this.cachePos = 0;
+    if (result.items.length < MAX_POSTS) this._setEOF('no-more-posts');
+    this.globalOffset += result.items.length;
+  }
+
+  _advance(n) {
+    const values = this.cache.slice(this.cachePos, this.cachePos + n);
+    this.cachePos += n;
+    return values;
+  }
+
+  async read(n) {
+    while (true) {
+      const available = this.cache.length - this.cachePos;
+      if (available >= n) return {
+        values: this._advance(n),
+        eof: false
+      };
+      if (this.eof) return {
+        values: this._advance(available),
+        eof: true
+      };
+      await this._repopulateCache();
+    }
+  }
+
+}
+
+class HotGroup {
+  constructor(config, reader, groupSize) {
+    this.config = config;
+    this.hotArray = [];
+    this.eof = false;
+    this.reader = reader;
+    this.groupSize = groupSize;
+  }
+
+  async getHotGroup() {
+    while (this.hotArray.length < this.groupSize && !this.eof) {
+      const {
+        values,
+        eof
+      } = await this.reader.read(this.groupSize - this.hotArray.length);
+
+      for (const value of values) {
+        this.config.callback('info-add', value);
+        if (value.offset !== value.total) this.hotArray.push(value);
+      }
+
+      this.eof = eof;
+    }
+
+    return this.hotArray;
+  }
+
+  setHotGroup(hotArray) {
+    this.hotArray = [];
+
+    for (const value of hotArray) {
+      this.config.callback('info-update', value);
+      if (value.offset !== value.total) this.hotArray.push(value);
+    }
+  }
+
+}
+
+const sortItOut = async config => {
+  const MAX_COMMENTS = 100;
+  const MAX_REQUESTS_IN_EXECUTE = 25;
+  const reader = new Reader(config);
+  const hotGroup = new HotGroup(reader, MAX_REQUESTS_IN_EXECUTE);
+
+  while (true) {
+    const hotArray = hotGroup.getHotGroup();
+    if (hotArray.length === 0) break;
+    let code = `var r = [];`;
+
+    for (const value of hotArray) {
+      code += `r.push(API.wall.getComments({`;
+      code += `  owner_id: ${config.oid}, post_id: ${value.id}, count: ${MAX_COMMENTS},`;
+      code += `  offset: ${value.offset}, need_likes: 0, extended: 1, thread_items_count: 10`;
+      code += `}).profiles@.id);`;
+    }
+
+    code += `return r;`;
+    let result;
+
+    try {
+      result = await config.session.apiRequest('execute', {
+        code: code,
+        v: '5.101'
+      });
+    } catch (err) {
+      if (!(err instanceof _vk_api.VkApiError)) throw err;
+      await config.rethrowOrIgnore(err); // skip the first one
+
+      hotArray[0].offset = hotArray[0].total;
+      hotGroup.setHotGroup(hotArray);
+      continue;
+    }
+
+    for (let i = 0; i < hotArray.length; ++i) {
+      const value = hotArray[i];
+      const posterIds = result[i];
+
+      if (posterIds.indexOf(config.uid) !== -1) {
+        // TODO fetch the post manually
+        config.callback('found', {
+          postId: value.id,
+          commentNo: -1
+        });
+        value.offset = value.total;
+      } else {
+        value.offset = Math.min(value.offset + MAX_COMMENTS, value.total);
+      }
+    }
+
+    hotGroup.setHotGroup(hotArray);
+  }
+};
+
+},{"./vk_api.js":5}]},{},[3]);
