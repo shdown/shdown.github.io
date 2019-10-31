@@ -19,7 +19,7 @@ class Reader {
 
   _setEOF(reason) {
     if (!this._eof) {
-      this._config.callback('last', reason);
+      this._config.callback('postDiscoveryStop', reason);
 
       this._eof = true;
     }
@@ -32,26 +32,29 @@ class Reader {
       offset: this._globalOffset,
       count: MAX_POSTS,
       v: '5.101'
-    }); // Let's explicitly copy the slice — I don't trust modern JS engines not to introduce a
+    }); // Let's explicitly copy the slice -- I don't trust modern JS engines not to introduce a
     // memory leak here.
 
     const newCache = [...this._cache.slice(this._cachePos)];
 
     for (const datum of result.items) {
-      if (datum.date < this._config.timeLimit && !datum.is_pinned) {
+      const isPinned = datum.is_pinned;
+
+      if (datum.date < this._config.timeLimit && !isPinned) {
         this._setEOF('time-limit');
 
         break;
       }
 
-      if (datum.is_pinned && this._config.ignorePinned) continue; //if (datum.marked_as_ads)
+      if (isPinned && this._config.ignorePinned) continue; //if (datum.marked_as_ads)
       //    continue;
 
       const value = {
         id: datum.id,
         offset: 0,
         total: datum.comments.count,
-        date: datum.date
+        date: datum.date,
+        pinned: isPinned
       };
 
       if (datum.from_id === this._config.uid) {
@@ -64,12 +67,12 @@ class Reader {
         value.offset = value.total;
       }
 
-      this._config.callback('info-add', value);
+      this._config.callback('infoAdd', value);
 
       newCache.push(value);
     }
 
-    this._config.callback('info-flush');
+    this._config.callback('infoFlush', null);
 
     this._cache = newCache;
     this._cachePos = 0;
@@ -134,12 +137,12 @@ class HotGroup {
       const value = this._hotArray[i];
       value.offset += byAmounts[i];
 
-      this._config.callback('info', value);
+      this._config.callback('infoUpdate', value);
 
       if (value.offset !== value.total) newHotArray.push(value);
     }
 
-    this._config.callback('info-flush');
+    this._config.callback('infoFlush', null);
 
     this._hotArray = newHotArray;
   }
@@ -208,16 +211,13 @@ const findPosts = async config => {
 
 exports.findPosts = findPosts;
 
-},{"./vk_api.js":10}],2:[function(require,module,exports){
+},{"./vk_api.js":11}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.ChartController = void 0;
-
-const copyDatum = value => ({ ...value
-});
 
 class ChartController {
   constructor(maxBarsNum, painter) {
@@ -270,9 +270,12 @@ class ChartController {
   }
 
   handleAdd(value) {
-    const i = this._findLRU();
+    // Optimized for the most common/hot path: no 'null' elements in 'this._bars'.
+    let i = this._bars.length - 1;
 
-    if (this._bars[i] === null) this._assign(i, value);
+    while (i !== -1 && this._bars[i] === null) --i;
+
+    if (i !== this._bars.length - 1) this.assign(i + 1, value);
   }
 
   handleUpdate(value) {
@@ -299,9 +302,9 @@ exports.ChartPainter = void 0;
 
 var _chart = require("chart.js");
 
-const BG_COLOR = 'rgba(230,230,230,0.3)';
-const FG_COLORS = [// https://mycolor.space/?hex=%234A76A8&sub=1
-'rgba(74,118,168,1)', // blue
+const BG_COLOR = 'rgba(230,230,230,0.3)'; // https://mycolor.space/?hex=%234A76A8&sub=1
+
+const FG_COLORS = ['#4A76A8', // blue
 '#A45E75', // red
 '#008A5F', // green
 '#C4A270' // brown
@@ -401,7 +404,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"chart.js":8}],4:[function(require,module,exports){
+},{"chart.js":9}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -414,6 +417,49 @@ const config = {
 exports.config = config;
 
 },{}],5:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.Estimator = void 0;
+
+class Estimator {
+  constructor() {
+    this.offsets = {};
+    this.totalDone = 0;
+    this.totalTodo = 0;
+    this.latestSeen = Infinity;
+  }
+
+  handleAdd(value) {
+    this.totalDone += value.offset;
+    this.totalTodo += value.total;
+    if (!value.pinned) this.latestSeen = Math.min(this.latestSeen, value.date);
+  }
+
+  handleUpdate(value) {
+    const {
+      id,
+      offset
+    } = value;
+    const delta = offset - (this.offsets[id] || 0);
+    this.totalDone += delta;
+    if (offset === value.total) delete this.offsets[id];else this.offsets[id] = offset;
+  }
+
+  estimateProgress(serverNow, timeLimit) {
+    if (this.latestSeen === Infinity) return NaN;
+    const numerator = this.totalDone;
+    const denominator = this.totalTodo / (serverNow - this.latestSeen) * timeLimit;
+    return numerator / denominator;
+  }
+
+}
+
+exports.Estimator = Estimator;
+
+},{}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -437,7 +483,7 @@ const htmlEscape = s => {
 
 exports.htmlEscape = htmlEscape;
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 
 var _vk_request = require("./vk_request.js");
@@ -453,6 +499,8 @@ var _algo = require("./algo.js");
 var _chart_ctl = require("./chart_ctl.js");
 
 var _chart_painter = require("./chart_painter.js");
+
+var _estimator = require("./estimator.js");
 
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
@@ -526,38 +574,38 @@ document.addEventListener('DOMContentLoaded', () => {
       code: 'return [API.utils.getServerTime()];',
       v: '5.101'
     });
+    const estimator = new _estimator.Estimator();
+    const timeLimit = timeLimitDays * 24 * 60 * 60;
+    const callbacks = {
+      found: datum => {
+        say(`FOUND: https://vk.com/wall${gid}_${datum.postId}`);
+      },
+      infoAdd: datum => {
+        chartCtl.handleAdd(datum);
+        estimator.handleAdd(datum);
+      },
+      infoUpdate: datum => {
+        chartCtl.handleUpdate(datum);
+        estimator.handleUpdate(datum);
+      },
+      infoFlush: _ => {
+        chartCtl.handleFlush();
+        say(`PROGRESS => ${estimator.estimateProgress(serverTime, timeLimit)}`);
+      }
+    };
     const config = {
       session: session,
       oid: gid,
       uid: uid,
-      timeLimit: serverTime - timeLimitDays * 24 * 60 * 60,
+      timeLimit: serverTime - timeLimit,
       rethrowOrIgnore: async err => {
         // TODO
         throw err;
       },
       ignorePinned: false,
-      callback: (what, datum) => {
-        switch (what) {
-          case 'found':
-            say(`FOUND: https://vk.com/wall${gid}_${datum.postId}`);
-            break;
-
-          case 'info-add':
-            chartCtl.handleAdd(datum);
-            break;
-
-          case 'info':
-            chartCtl.handleUpdate(datum);
-            break;
-
-          case 'info-flush':
-            chartCtl.handleFlush();
-            break;
-
-          default:
-            say(`callback: ${what}: ${JSON.stringify(datum)}`);
-            break;
-        }
+      callback: (what, arg) => {
+        const fn = callbacks[what];
+        if (fn) fn(arg);else say(`No callback for "${what}": ${JSON.stringify(datum)}`);
       }
     };
     say('Transferring control to findPosts()...');
@@ -628,12 +676,12 @@ document.addEventListener('DOMContentLoaded', () => {
   say('Initialized');
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./html_escape.js":5,"./vk_api.js":10,"./vk_request.js":11}],7:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./estimator.js":5,"./html_escape.js":6,"./vk_api.js":11,"./vk_request.js":12}],8:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -15767,7 +15815,7 @@ document.addEventListener('DOMContentLoaded', () => {
   return src;
 });
 
-},{"moment":9}],9:[function(require,module,exports){
+},{"moment":10}],10:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -20371,7 +20419,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })));
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20524,7 +20572,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./vk_request.js":11}],11:[function(require,module,exports){
+},{"./vk_request.js":12}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20606,4 +20654,4 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":7}]},{},[6]);
+},{"@vkontakte/vk-connect":8}]},{},[7]);
