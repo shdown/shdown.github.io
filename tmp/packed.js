@@ -508,6 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const progress = document.createElement('progress');
   progress.setAttribute('max', '1000');
   progress.style.display = 'block';
+  progress.style.width = '100%';
   const canvas = document.createElement('canvas');
   const textArea = document.createElement('div');
   const painter = new _chart_painter.ChartPainter(canvas);
@@ -621,17 +622,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const uid_div = document.createElement('span');
   uid_div.innerHTML = 'User ID: ';
   const uid_input = document.createElement('input');
+  uid_input.style.width = '15% !important';
   uid_input.setAttribute('type', 'number');
   uid_input.setAttribute('required', '1');
   const gid_div = document.createElement('span');
   gid_div.innerHTML = 'Group ID: ';
   const gid_input = document.createElement('input');
+  gid_input.style.width = '15% !important';
   gid_input.setAttribute('type', 'number');
   gid_input.setAttribute('required', '1');
   const tl_div = document.createElement('span');
   tl_div.innerHTML = 'Time limit (days): ';
   const tl_input = document.createElement('input');
   tl_input.setAttribute('type', 'number');
+  tl_input.style.width = '10% !important';
   tl_input.setAttribute('value', '7');
   tl_input.setAttribute('required', '1');
   const btn_div = document.createElement('span');
