@@ -316,6 +316,7 @@ const DEFAULT_PARAMS = {
   borderWidth: 1,
   maxBarThickness: 20
 };
+const UPDATE_DURATION = 150;
 
 class ChartPainter {
   constructor(canvas) {
@@ -397,7 +398,9 @@ class ChartPainter {
   }
 
   flush() {
-    this._chart.update();
+    this._chart.update({
+      duration: UPDATE_DURATION
+    });
   }
 
 }
@@ -426,16 +429,17 @@ exports.Estimator = void 0;
 
 class Estimator {
   constructor() {
-    this.offsets = {};
-    this.totalDone = 0;
-    this.totalTodo = 0;
-    this.latestSeen = Infinity;
+    this._offsets = {};
+    this._totalDone = 0;
+    this._totalTodo = 0;
+    this._latestSeen = Infinity;
   }
 
   handleAdd(value) {
-    this.totalDone += value.offset;
-    this.totalTodo += value.total;
-    if (!value.pinned) this.latestSeen = Math.min(this.latestSeen, value.date);
+    this._totalDone += value.offset;
+    this._totalTodo += value.total;
+    if (value.offset !== 0 && value.offset !== value.total) this._offsets[value.id] = value.offset;
+    if (!value.pinned) this._latestSeen = Math.min(this._latestSeen, value.date);
   }
 
   handleUpdate(value) {
@@ -443,15 +447,15 @@ class Estimator {
       id,
       offset
     } = value;
-    const delta = offset - (this.offsets[id] || 0);
-    this.totalDone += delta;
-    if (offset === value.total) delete this.offsets[id];else this.offsets[id] = offset;
+    const delta = offset - (this._offsets[id] || 0);
+    this._totalDone += delta;
+    if (offset === value.total) delete this._offsets[id];else this._offsets[id] = offset;
   }
 
   estimateProgress(serverNow, timeLimit) {
-    if (this.latestSeen === Infinity) return NaN;
-    const numerator = this.totalDone;
-    const denominator = this.totalTodo / (serverNow - this.latestSeen) * timeLimit;
+    if (this._latestSeen === Infinity) return NaN;
+    const numerator = this._totalDone;
+    const denominator = this._totalTodo / (serverNow - this._latestSeen) * timeLimit;
     return numerator / denominator;
   }
 
@@ -596,7 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
       infoFlush: _ => {
         chartCtl.handleFlush();
         const ratio = estimator.estimateProgress(serverTime, timeLimit);
-        progress.setAttribute('value', String(Math.round(1000 * ratio)));
+        if (!isNaN(ratio)) progress.setAttribute('value', String(Math.round(1000 * ratio)));
       }
     };
     const config = {
@@ -622,20 +626,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const uid_div = document.createElement('span');
   uid_div.innerHTML = 'User ID: ';
   const uid_input = document.createElement('input');
-  uid_input.style.width = '15% !important';
+  uid_input.style.width = '15%';
   uid_input.setAttribute('type', 'number');
   uid_input.setAttribute('required', '1');
   const gid_div = document.createElement('span');
   gid_div.innerHTML = 'Group ID: ';
   const gid_input = document.createElement('input');
-  gid_input.style.width = '15% !important';
+  gid_input.style.width = '15%';
   gid_input.setAttribute('type', 'number');
   gid_input.setAttribute('required', '1');
   const tl_div = document.createElement('span');
   tl_div.innerHTML = 'Time limit (days): ';
   const tl_input = document.createElement('input');
   tl_input.setAttribute('type', 'number');
-  tl_input.style.width = '10% !important';
+  tl_input.style.width = '10%';
   tl_input.setAttribute('value', '7');
   tl_input.setAttribute('required', '1');
   const btn_div = document.createElement('span');
@@ -20558,17 +20562,17 @@ class VkApiSession {
 
         switch (err.code) {
           case 6:
-            await this._limitRate('rate-limit', 3000);
+            await this._limitRate('rateLimit', 3000);
             break;
 
           case 9:
             // this one was not seen in practice, but still...
-            await this._limitRate('rate-limit-hard', 9000);
+            await this._limitRate('rateLimitHard', 9000);
             break;
 
           case 1:
           case 10:
-            await this._limitRate('server-unavailable', 1000);
+            await this._limitRate('serverUnavailable', 1000);
             break;
 
           default:
