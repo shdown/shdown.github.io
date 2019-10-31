@@ -360,7 +360,7 @@ class ChartPainter {
     });
     this._fg_indices = [];
     this._lastRepaint = NaN;
-    this._repaintScheduled = false;
+    this._repaintTimerId = null;
   }
 
   _nextFgColorFor(i) {
@@ -412,20 +412,28 @@ class ChartPainter {
   }
 
   _scheduleRepaint(delay) {
-    this._repaintScheduled = true;
-    setTimeout(() => {
+    this._repaintTimerId = setTimeout(() => {
       this._repaint();
 
-      this._repaintScheduled = false;
+      this._repaintTimerId = null;
     }, delay);
   }
 
   flush() {
-    if (this._repaintScheduled) return;
+    if (this._repaintTimerId !== null) return;
 
     const interval = monotonicNowMillis() - this._lastRepaint;
 
     if (interval < MIN_INTERVAL_MILLIS) this._scheduleRepaint(MIN_INTERVAL_MILLIS - interval);else this._repaint();
+  }
+
+  reset() {
+    if (this._repaintTimerId !== null) {
+      clearTimeout(this._repaintTimerId);
+      this._repaintTimerId = null;
+    }
+
+    this._lastRepaint = NaN;
   }
 
 }
@@ -599,6 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const work = async (uid, gid, timeLimitDays) => {
+    painter.reset();
     session.setAccessToken((await getAccessToken('')));
     session.setRateLimitCallback(reason => {
       say(`We are being too fast (${reason})!`);
