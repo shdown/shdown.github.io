@@ -275,7 +275,7 @@ class ChartController {
 
     while (i !== -1 && this._bars[i] === null) --i;
 
-    if (i !== this._bars.length - 1) this.assign(i + 1, value);
+    if (i !== this._bars.length - 1) this._assign(i + 1, value);
   }
 
   handleUpdate(value) {
@@ -505,14 +505,18 @@ var _estimator = require("./estimator.js");
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
+  const progress = document.createElement('progress');
+  progress.setAttribute('max', '1000');
+  progress.style.display = 'block';
   const canvas = document.createElement('canvas');
-  const canvasArea = document.createElement('div');
   const textArea = document.createElement('div');
   const painter = new _chart_painter.ChartPainter(canvas);
   const chartCtl = new _chart_ctl.ChartController(30, painter);
   const session = new _vk_api.VkApiSession();
 
   const setMode = mode => {
+    progress.setAttribute('value', '0');
+
     switch (mode) {
       case 'canvas':
         canvas.style.display = 'block';
@@ -590,7 +594,8 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       infoFlush: _ => {
         chartCtl.handleFlush();
-        say(`PROGRESS => ${estimator.estimateProgress(serverTime, timeLimit)}`);
+        const ratio = estimator.estimateProgress(serverTime, timeLimit);
+        progress.setAttribute('value', String(Math.round(1000 * ratio)));
       }
     };
     const config = {
@@ -605,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ignorePinned: false,
       callback: (what, arg) => {
         const fn = callbacks[what];
-        if (fn) fn(arg);else say(`No callback for "${what}": ${JSON.stringify(datum)}`);
+        if (fn) fn(arg);else say(`No callback for "${what}": ${JSON.stringify(arg)}`);
       }
     };
     say('Transferring control to findPosts()...');
@@ -613,23 +618,23 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const form = document.createElement('form');
-  const uid_div = document.createElement('div');
+  const uid_div = document.createElement('span');
   uid_div.innerHTML = 'User ID: ';
   const uid_input = document.createElement('input');
   uid_input.setAttribute('type', 'number');
   uid_input.setAttribute('required', '1');
-  const gid_div = document.createElement('div');
+  const gid_div = document.createElement('span');
   gid_div.innerHTML = 'Group ID: ';
   const gid_input = document.createElement('input');
   gid_input.setAttribute('type', 'number');
   gid_input.setAttribute('required', '1');
-  const tl_div = document.createElement('div');
+  const tl_div = document.createElement('span');
   tl_div.innerHTML = 'Time limit (days): ';
   const tl_input = document.createElement('input');
   tl_input.setAttribute('type', 'number');
   tl_input.setAttribute('value', '7');
   tl_input.setAttribute('required', '1');
-  const btn_div = document.createElement('div');
+  const btn_div = document.createElement('span');
   const submitBtn = document.createElement('input');
   submitBtn.setAttribute('type', 'submit');
   const cancelBtn = document.createElement('input');
@@ -671,6 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
   form.appendChild(tl_div);
   form.appendChild(btn_div);
   body.appendChild(form);
+  body.appendChild(progress);
   body.appendChild(canvas);
   body.appendChild(textArea);
   say('Initialized');
