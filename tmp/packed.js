@@ -64,7 +64,7 @@ class Reader {
         value.offset = value.total;
       }
 
-      this._config.callback('info', value);
+      this._config.callback('info-add', value);
 
       newCache.push(value);
     }
@@ -223,17 +223,41 @@ class ChartController {
   constructor(maxBarsNum, painter) {
     this._painter = painter;
     this._bars = Array(maxBarsNum).fill(null);
+    this._bumptimes = Array(maxBarsNum).fill(0);
+    this._timer = 1;
   }
 
-  _findVacant() {
-    for (let i = 0; i < this._bars.length; ++i) if (this._bars[i] === null) return i;
+  _assign(i, value) {
+    const copy = { ...value
+    };
+    const old = this._bars[i];
 
-    for (let i = this._bars.length - 1; i !== -1; --i) {
-      const value = this._bars[i];
-      if (value.offset === 0 || value.offset === value.total) return i;
+    if (old === null) {
+      this._painter.addBar(i, copy);
+    } else if (old.id === value.id) {
+      this._painter.setBarValue(i, copy);
+    } else {
+      this._painter.alterBar(i, copy);
     }
 
-    return null;
+    this._bars[i] = copy;
+    this._bumptimes[i] = this._timer++;
+  }
+
+  _findLRU() {
+    let min = this._timer;
+    let result = -1;
+
+    for (let i = 0; i < this._bumptimes.length; ++i) {
+      const cur = this._bumptimes[i];
+
+      if (cur < min) {
+        min = cur;
+        result = i;
+      }
+    }
+
+    return result;
   }
 
   _findWithId(id) {
@@ -245,24 +269,16 @@ class ChartController {
     return null;
   }
 
+  handleAdd(value) {
+    const i = this._findLRU();
+
+    if (this._bars[i] === null) this._assign(i, value);
+  }
+
   handleUpdate(value) {
     const i = this._findWithId(value.id);
 
-    if (i !== null) {
-      this._bars[i] = copyDatum(value);
-
-      this._painter.setBarValue(i, this._bars[i]);
-    } else {
-      const j = this._findVacant();
-
-      if (j !== null) {
-        const isNew = this._bars[j] === null;
-        this._bars[j] = copyDatum(value);
-        if (isNew) this._painter.addBar(j, this._bars[j]);else this._painter.alterBar(j, this._bars[j]);
-      } else {
-        console.log(`No place to draw bar for post ID ${value.id}`);
-      }
-    }
+    this._assign(i !== null ? i : this._findLRU(), value);
   }
 
   handleFlush() {
@@ -285,57 +301,54 @@ var _chart = require("chart.js");
 
 const BG_COLOR = 'rgba(230,230,230,0.3)';
 const FG_COLORS = [// https://mycolor.space/?hex=%234A76A8&sub=1
-'rgba(74,118,168,0.99)', // blue
+'rgba(74,118,168,1)', // blue
 '#A45E75', // red
 '#008A5F', // green
 '#C4A270' // brown
 ];
+const DEFAULT_PARAMS = {
+  barPercentage: 1,
+  categoryPercentage: 1,
+  borderColor: '#333333',
+  borderWidth: 1,
+  maxBarThickness: 20
+};
 
 class ChartPainter {
   constructor(canvas) {
-    const DEFAULT_PARAMS = {
-      barPercentage: 1,
-      categoryPercentage: 1,
-      borderColor: '#333333',
-      borderWidth: 1,
-      maxBarThickness: 20
-    };
     const data = {
       labels: [],
       datasets: [{ ...DEFAULT_PARAMS,
         data: [],
         backgroundColor: []
-        /*'rgba(74,118,168,0.99)'*/
-
       }, { ...DEFAULT_PARAMS,
         data: [],
         backgroundColor: []
-        /*'rgba(230,230,230,0.3)'*/
-
       }]
+    };
+    const options = {
+      tooltips: {
+        enabled: false
+      },
+      legend: {
+        display: false
+      },
+      scales: {
+        yAxes: [{
+          ticks: {
+            beginAtZero: true
+          },
+          stacked: true
+        }],
+        xAxes: [{
+          stacked: true
+        }]
+      }
     };
     this._chart = new _chart.Chart(canvas, {
       type: 'bar',
       data: data,
-      options: {
-        tooltips: {
-          enabled: false
-        },
-        legend: {
-          display: false
-        },
-        scales: {
-          yAxes: [{
-            ticks: {
-              beginAtZero: true
-            },
-            stacked: true
-          }],
-          xAxes: [{
-            stacked: true
-          }]
-        }
-      }
+      options: options
     });
     this._fg_indices = [];
   }
@@ -350,7 +363,7 @@ class ChartPainter {
     this._chart.data.datasets[1].data[i] = value.total - value.offset;
 
     if (newBar) {
-      this._chart.data.labels[i] = `Post ${value.id}`;
+      this._chart.data.labels[i] = String(value.id);
       this._chart.data.datasets[0].backgroundColor[i] = this._nextFgColorFor(i);
       this._chart.data.datasets[1].backgroundColor[i] = BG_COLOR;
     }
@@ -527,6 +540,10 @@ document.addEventListener('DOMContentLoaded', () => {
         switch (what) {
           case 'found':
             say(`FOUND: https://vk.com/wall${gid}_${datum.postId}`);
+            break;
+
+          case 'info-add':
+            chartCtl.handleAdd(datum);
             break;
 
           case 'info':
