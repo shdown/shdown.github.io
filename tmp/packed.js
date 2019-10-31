@@ -302,6 +302,9 @@ exports.ChartPainter = void 0;
 
 var _chart = require("chart.js");
 
+// TODO factor this out to "time_utils.js" or something like that
+const monotonicNowMillis = () => window.performance.now();
+
 const BG_COLOR = 'rgba(230,230,230,0.3)'; // https://mycolor.space/?hex=%234A76A8&sub=1
 
 const FG_COLORS = ['#4A76A8', // blue
@@ -316,7 +319,8 @@ const DEFAULT_PARAMS = {
   borderWidth: 1,
   maxBarThickness: 20
 };
-const UPDATE_DURATION = 150;
+const MIN_INTERVAL_MILLIS = 1500;
+const UPDATE_DURATION_MILLIS = 1000;
 
 class ChartPainter {
   constructor(canvas) {
@@ -355,6 +359,8 @@ class ChartPainter {
       options: options
     });
     this._fg_indices = [];
+    this._lastRepaint = NaN;
+    this._repaintScheduled = false;
   }
 
   _nextFgColorFor(i) {
@@ -397,10 +403,29 @@ class ChartPainter {
     this._update(i, value, true);
   }
 
-  flush() {
+  _repaint() {
+    this._lastRepaint = monotonicNowMillis();
+
     this._chart.update({
-      duration: UPDATE_DURATION
+      duration: UPDATE_DURATION_MILLIS
     });
+  }
+
+  _scheduleRepaint(delay) {
+    this._repaintScheduled = true;
+    setTimeout(() => {
+      this._repaint();
+
+      this._repaintScheduled = false;
+    }, delay);
+  }
+
+  flush() {
+    if (this._repaintScheduled) return;
+
+    const interval = monotonicNowMillis() - this._lastRepaint;
+
+    if (interval < MIN_INTERVAL_MILLIS) this._scheduleRepaint(MIN_INTERVAL_MILLIS - interval);else this._repaint();
   }
 
 }
