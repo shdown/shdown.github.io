@@ -4,9 +4,13 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.findPosts = void 0;
+exports.gatherStats = exports.findPosts = void 0;
 
 var _vk_api = require("./vk_api.js");
+
+const MAX_POSTS = 100;
+const MAX_COMMENTS = 100;
+const MAX_REQUESTS_IN_EXECUTE = 25;
 
 class Reader {
   constructor(config) {
@@ -26,7 +30,6 @@ class Reader {
   }
 
   async _repopulateCache() {
-    const MAX_POSTS = 100;
     const result = await this._config.session.apiRequest('wall.get', {
       owner_id: this._config.oid,
       offset: this._globalOffset,
@@ -40,7 +43,7 @@ class Reader {
     for (const datum of result.items) {
       const isPinned = datum.is_pinned;
 
-      if (datum.date < this._config.timeLimit && !isPinned) {
+      if (datum.date < this._config.sinceTimestamp && !isPinned) {
         this._setEOF('timeLimitReached');
 
         break;
@@ -159,10 +162,7 @@ class HotGroup {
 
 }
 
-const MAX_COMMENTS = 100;
-const MAX_REQUESTS_IN_EXECUTE = 25;
-
-const scheduleChunk = hotArray => {
+const scheduleBatch = hotArray => {
   const result = [];
 
   for (let offsetSummand = 0;; offsetSummand += MAX_COMMENTS) {
@@ -192,11 +192,11 @@ const findPosts = async config => {
   while (true) {
     const hotArray = await hotGroup.getCurrent();
     if (hotArray.length === 0) break;
-    const chunk = scheduleChunk(hotArray);
+    const batch = scheduleBatch(hotArray);
     let code = `var i = 0, r = [];`;
-    code += `var d = [${chunk.map(datum => datum.id).join(',')}];`;
-    code += `var o = [${chunk.map(datum => datum.offset).join(',')}];`;
-    code += `while (i < ${chunk.length}) {`;
+    code += `var d = [${batch.map(datum => datum.id).join(',')}];`;
+    code += `var o = [${batch.map(datum => datum.offset).join(',')}];`;
+    code += `while (i < ${batch.length}) {`;
     code += ` r.push(API.wall.getComments({`;
     code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
     code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
@@ -215,7 +215,7 @@ const findPosts = async config => {
       if (!(err instanceof _vk_api.VkApiError)) throw err;
       await config.rethrowOrIgnore(err); // skip the first post
 
-      const datum = chunk[0];
+      const datum = batch[0];
       const amountsById = {};
       amountsById[datum.id] = Infinity;
       hotGroup.decreaseCurrent(amountsById);
@@ -224,8 +224,8 @@ const findPosts = async config => {
 
     const amountsById = {};
 
-    for (let i = 0; i < chunk.length; ++i) {
-      const datum = chunk[i];
+    for (let i = 0; i < batch.length; ++i) {
+      const datum = batch[i];
       const posterIds = result[i];
       const oldAmount = amountsById[datum.id] || 0;
 
@@ -245,6 +245,54 @@ const findPosts = async config => {
 };
 
 exports.findPosts = findPosts;
+
+const gatherStats = async config => {
+  const result = {};
+  const oids = config.oids;
+  let offset = 0;
+
+  while (offset !== oids.length) {
+    const batchSize = Math.min(oids.length - offset, MAX_REQUESTS_IN_EXECUTE);
+    const batch = oids.slice(offset, offset + batchSize);
+    let code = `var i = 0, r = [];`;
+    code += `var d = [${batch.join(',')}];`;
+    code += `while (i < ${batch.length}) {`;
+    code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${MAX_POSTS}}));`;
+    code += ` i = i + 1;`;
+    code += `}`;
+    code += `return r;`;
+    const data = await config.session.apiRequest('execute', {
+      code: code,
+      v: '5.101'
+    });
+
+    for (let i = 0; i < data.length; ++i) {
+      const ownerDatum = data[i];
+      const ownerId = batch[i];
+      let totalComments = 0;
+      let earliestTimestamp = Infinity;
+
+      for (const post of ownerDatum.items) {
+        const isPinned = post.is_pinned;
+        if (post.date < (void 0)._config.sinceTimestamp && !isPinned) break;
+        if (isPinned && config.ignorePinned) continue;
+        totalComments += post.comments.count;
+        if (!isPinned) earliestTimestamp = Math.min(earliestTimestamp, post.date);
+      }
+
+      result[ownerId] = {
+        totalComments: totalComments,
+        earliestTimestamp: earliestTimestamp
+      };
+    }
+
+    offset += batchSize;
+  }
+
+  return result;
+};
+
+exports.gatherStats = gatherStats;
 
 },{"./vk_api.js":13}],2:[function(require,module,exports){
 "use strict";
@@ -339,6 +387,10 @@ var _chart = require("chart.js");
 
 var _time_utils = require("./time_utils.js");
 
+const clearArray = array => {
+  array.splice(0, array.length);
+};
+
 const BG_COLOR = 'rgba(230,230,230,0.3)'; // https://mycolor.space/?hex=%234A76A8&sub=1
 
 const FG_COLORS = ['#4A76A8', // blue
@@ -394,7 +446,7 @@ class ChartPainter {
       options: options
     });
     this._fgIndices = [];
-    this._lastRepaint = NaN;
+    this._lastRepaintTimestamp = -Infinity;
     this._repaintTimerId = null;
   }
 
@@ -443,7 +495,7 @@ class ChartPainter {
   }
 
   _repaint() {
-    this._lastRepaint = (0, _time_utils.monotonicNowMillis)();
+    this._lastRepaintTimestamp = (0, _time_utils.monotonicNowMillis)();
 
     this._chart.update({
       duration: UPDATE_DURATION_MILLIS
@@ -461,7 +513,7 @@ class ChartPainter {
   flush() {
     if (this._repaintTimerId !== null) return;
 
-    const interval = (0, _time_utils.monotonicNowMillis)() - this._lastRepaint;
+    const interval = (0, _time_utils.monotonicNowMillis)() - this._lastRepaintTimestamp;
 
     if (interval < MIN_INTERVAL_MILLIS) this._scheduleRepaint(MIN_INTERVAL_MILLIS - interval);else this._repaint();
   }
@@ -472,7 +524,14 @@ class ChartPainter {
       this._repaintTimerId = null;
     }
 
-    this._lastRepaint = NaN;
+    clearArray(this._chart.data.labels);
+    clearArray(this._chart.data.datasets[0].data);
+    clearArray(this._chart.data.datasets[1].data);
+    clearArray(this._chart.data.datasets[0].backgroundColor);
+    clearArray(this._chart.data.datasets[1].backgroundColor);
+    clearArray(this._fgIndices);
+
+    this._repaint();
   }
 
 }
@@ -637,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
       session: session,
       oid: gid,
       uid: uid,
-      timeLimit: serverTime - timeLimit,
+      sinceTimestamp: serverTime - timeLimit,
       rethrowOrIgnore: async err => {
         // TODO
         throw err;
@@ -20473,13 +20532,12 @@ Object.defineProperty(exports, "__esModule", {
 exports.ProgressEstimator = void 0;
 
 class ProgressEstimator {
-  constructor(serverNow, timeLimit, painter) {
+  constructor(config, painter) {
     this._offsets = {};
     this._totalDone = 0;
     this._totalTodo = 0;
-    this._latestSeen = Infinity;
-    this._serverNow = serverNow;
-    this._timeLimit = timeLimit;
+    this._earliestTimestamp = Infinity;
+    this._config = config;
     this._painter = painter;
   }
 
@@ -20487,7 +20545,7 @@ class ProgressEstimator {
     this._totalDone += value.offset;
     this._totalTodo += value.total;
     if (value.offset !== 0 && value.offset !== value.total) this._offsets[value.id] = value.offset;
-    if (!value.pinned) this._latestSeen = Math.min(this._latestSeen, value.date);
+    if (!value.pinned) this._earliestTimestamp = Math.min(this._earliestTimestamp, value.date);
   }
 
   handleUpdate(value) {
@@ -20502,9 +20560,17 @@ class ProgressEstimator {
 
   handleFlush() {
     const numerator = this._totalDone;
-    const denominator = this._totalTodo / (this._serverNow - this._latestSeen) * this._timeLimit;
-    const ratio = numerator / denominator;
-    if (isNaN(ratio)) this._painter.setUnknown();else this._painter.setRatio(ratio < 0 ? 0 : ratio > 1 ? 1 : ratio);
+    const expectedCommentsPerSecond = this._totalTodo / (this._config.serverNow - this._earliestTimestamp);
+    const denominator = this._totalTodo / expectedCommentsPerSecond * this._config.timeLimit;
+
+    this._painter.setRatio(numerator, denominator);
+  }
+
+  getStats() {
+    return {
+      earliestTimestamp: this._earliestTimestamp,
+      totalComments: this._totalTodo
+    };
   }
 
 }
@@ -20524,7 +20590,7 @@ class ProgressPainter {
   constructor() {
     this._element = document.createElement('progress');
 
-    this._element.setAttribute('max', MAX_VALUE);
+    this._element.setAttribute('max', String(MAX_VALUE));
   }
 
   get element() {
@@ -20535,8 +20601,17 @@ class ProgressPainter {
     this._element.setAttribute('value', '');
   }
 
-  setRatio(ratio) {
-    this._element.setAttribute('value', String(Math.round(ratio * MAX_VALUE)));
+  setRatio(numerator, denominator) {
+    let ratio = numerator / denominator;
+
+    if (isNaN(ratio)) {
+      this.setUnknown();
+    } else {
+      if (ratio < 0) ratio = 0;
+      if (ratio > 1) ratio = 1;
+
+      this._element.setAttribute('value', String(Math.round(ratio * MAX_VALUE)));
+    }
   }
 
 }
@@ -20592,13 +20667,13 @@ class VkApiCancellation extends Error {
 }
 
 exports.VkApiCancellation = VkApiCancellation;
-const MIN_DELAY_MILLIS = 0.36 * 1000;
+const MIN_DELAY_MILLIS = 360;
 
 class VkApiSession {
   constructor() {
     this._accessToken = null;
     this._rateLimitCallback = null;
-    this._lastRequestTimestamp = NaN;
+    this._lastRequestTimestamp = -Infinity;
     this._cancelFlag = false;
   }
 
