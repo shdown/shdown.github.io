@@ -41,7 +41,7 @@ class Reader {
       const isPinned = datum.is_pinned;
 
       if (datum.date < this._config.timeLimit && !isPinned) {
-        this._setEOF('time-limit');
+        this._setEOF('timeLimitReached');
 
         break;
       }
@@ -76,7 +76,7 @@ class Reader {
 
     this._cache = newCache;
     this._cachePos = 0;
-    if (result.items.length < MAX_POSTS) this._setEOF('no-more-posts');
+    if (result.items.length < MAX_POSTS) this._setEOF('noNorePosts');
     this._globalOffset += result.items.length;
   }
 
@@ -211,7 +211,7 @@ const findPosts = async config => {
 
 exports.findPosts = findPosts;
 
-},{"./vk_api.js":11}],2:[function(require,module,exports){
+},{"./vk_api.js":13}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -302,8 +302,7 @@ exports.ChartPainter = void 0;
 
 var _chart = require("chart.js");
 
-// TODO factor this out to "time_utils.js" or something like that
-const monotonicNowMillis = () => window.performance.now();
+var _time_utils = require("./time_utils.js");
 
 const BG_COLOR = 'rgba(230,230,230,0.3)'; // https://mycolor.space/?hex=%234A76A8&sub=1
 
@@ -319,11 +318,12 @@ const DEFAULT_PARAMS = {
   borderWidth: 1,
   maxBarThickness: 20
 };
-const MIN_INTERVAL_MILLIS = 1500;
-const UPDATE_DURATION_MILLIS = 1000;
+const MIN_INTERVAL_MILLIS = 600;
+const UPDATE_DURATION_MILLIS = 350;
 
 class ChartPainter {
-  constructor(canvas) {
+  constructor() {
+    this._canvas = document.createElement('canvas');
     const data = {
       labels: [],
       datasets: [{ ...DEFAULT_PARAMS,
@@ -353,19 +353,23 @@ class ChartPainter {
         }]
       }
     };
-    this._chart = new _chart.Chart(canvas, {
+    this._chart = new _chart.Chart(this._canvas, {
       type: 'bar',
       data: data,
       options: options
     });
-    this._fg_indices = [];
+    this._fgIndices = [];
     this._lastRepaint = NaN;
     this._repaintTimerId = null;
   }
 
+  get element() {
+    return this._canvas;
+  }
+
   _nextFgColorFor(i) {
-    this._fg_indices[i] = (this._fg_indices[i] + 1) % FG_COLORS.length;
-    return FG_COLORS[this._fg_indices[i]];
+    this._fgIndices[i] = (this._fgIndices[i] + 1) % FG_COLORS.length;
+    return FG_COLORS[this._fgIndices[i]];
   }
 
   _update(i, value, newBar) {
@@ -394,7 +398,7 @@ class ChartPainter {
 
     this._chart.data.datasets[1].backgroundColor.push('');
 
-    this._fg_indices.push(-1);
+    this._fgIndices.push(-1);
 
     this._update(i, value, true);
   }
@@ -404,25 +408,25 @@ class ChartPainter {
   }
 
   _repaint() {
-    this._lastRepaint = monotonicNowMillis();
+    this._lastRepaint = (0, _time_utils.monotonicNowMillis)();
 
     this._chart.update({
       duration: UPDATE_DURATION_MILLIS
     });
   }
 
-  _scheduleRepaint(delay) {
+  _scheduleRepaint(delayMillis) {
     this._repaintTimerId = setTimeout(() => {
       this._repaint();
 
       this._repaintTimerId = null;
-    }, delay);
+    }, delayMillis);
   }
 
   flush() {
     if (this._repaintTimerId !== null) return;
 
-    const interval = monotonicNowMillis() - this._lastRepaint;
+    const interval = (0, _time_utils.monotonicNowMillis)() - this._lastRepaint;
 
     if (interval < MIN_INTERVAL_MILLIS) this._scheduleRepaint(MIN_INTERVAL_MILLIS - interval);else this._repaint();
   }
@@ -440,7 +444,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"chart.js":9}],4:[function(require,module,exports){
+},{"./time_utils.js":12,"chart.js":8}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -453,50 +457,6 @@ const config = {
 exports.config = config;
 
 },{}],5:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.Estimator = void 0;
-
-class Estimator {
-  constructor() {
-    this._offsets = {};
-    this._totalDone = 0;
-    this._totalTodo = 0;
-    this._latestSeen = Infinity;
-  }
-
-  handleAdd(value) {
-    this._totalDone += value.offset;
-    this._totalTodo += value.total;
-    if (value.offset !== 0 && value.offset !== value.total) this._offsets[value.id] = value.offset;
-    if (!value.pinned) this._latestSeen = Math.min(this._latestSeen, value.date);
-  }
-
-  handleUpdate(value) {
-    const {
-      id,
-      offset
-    } = value;
-    const delta = offset - (this._offsets[id] || 0);
-    this._totalDone += delta;
-    if (offset === value.total) delete this._offsets[id];else this._offsets[id] = offset;
-  }
-
-  estimateProgress(serverNow, timeLimit) {
-    if (this._latestSeen === Infinity) return NaN;
-    const numerator = this._totalDone;
-    const denominator = this._totalTodo / (serverNow - this._latestSeen) * timeLimit;
-    return numerator / denominator;
-  }
-
-}
-
-exports.Estimator = Estimator;
-
-},{}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -520,7 +480,7 @@ const htmlEscape = s => {
 
 exports.htmlEscape = htmlEscape;
 
-},{}],7:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 
 var _vk_request = require("./vk_request.js");
@@ -537,32 +497,32 @@ var _chart_ctl = require("./chart_ctl.js");
 
 var _chart_painter = require("./chart_painter.js");
 
-var _estimator = require("./estimator.js");
+var _progress_estimator = require("./progress_estimator.js");
+
+var _progress_painter = require("./progress_painter.js");
 
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
-  const progress = document.createElement('progress');
-  progress.setAttribute('max', '1000');
-  progress.style.display = 'block';
-  progress.style.width = '100%';
-  const canvas = document.createElement('canvas');
+  const progressPainter = new _progress_painter.ProgressPainter();
+  progressPainter.element.style = 'display: block; width: 100%;';
+  const chartPainter = new _chart_painter.ChartPainter();
   const textArea = document.createElement('div');
-  const painter = new _chart_painter.ChartPainter(canvas);
-  const chartCtl = new _chart_ctl.ChartController(30, painter);
+  const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
   const session = new _vk_api.VkApiSession();
 
   const setMode = mode => {
-    progress.setAttribute('value', '0');
+    progressPainter.setUnknown();
+    const chartElement = chartPainter.element;
 
     switch (mode) {
-      case 'canvas':
-        canvas.style.display = 'block';
+      case 'chart':
+        chartElement.style.display = 'block';
         textArea.style.display = 'none';
         break;
 
       case 'text':
-        canvas.style.display = 'none';
+        chartElement.style.display = 'none';
         textArea.style.display = 'block';
         break;
 
@@ -571,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  setMode('canvas'); //const logArea = document.createElement('div');
+  setMode('chart'); //const logArea = document.createElement('div');
   //const resetLogArea = () => {
   //    logArea.innerHTML = '<hr/><b>Log area:</b>';
   //    const clearBtn = document.createElement('input');
@@ -607,7 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const work = async (uid, gid, timeLimitDays) => {
-    painter.reset();
+    chartPainter.reset();
     session.setAccessToken((await getAccessToken('')));
     session.setRateLimitCallback(reason => {
       say(`We are being too fast (${reason})!`);
@@ -617,8 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
       code: 'return [API.utils.getServerTime()];',
       v: '5.101'
     });
-    const estimator = new _estimator.Estimator();
     const timeLimit = timeLimitDays * 24 * 60 * 60;
+    const estimator = new _progress_estimator.ProgressEstimator(serverTime, timeLimit, progressPainter);
     const callbacks = {
       found: datum => {
         say(`FOUND: https://vk.com/wall${gid}_${datum.postId}`);
@@ -633,8 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       infoFlush: _ => {
         chartCtl.handleFlush();
-        const ratio = estimator.estimateProgress(serverTime, timeLimit);
-        if (!isNaN(ratio)) progress.setAttribute('value', String(Math.round(1000 * ratio)));
+        estimator.handleFlush();
       }
     };
     const config = {
@@ -692,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uid = parseInt(uid_input.value);
     const gid = parseInt(gid_input.value);
     const tl = parseFloat(tl_input.value);
-    setMode('canvas');
+    setMode('chart');
     work(uid, gid, tl).then(() => {
       say('Done...');
       setMode('text');
@@ -718,18 +677,18 @@ document.addEventListener('DOMContentLoaded', () => {
   form.appendChild(tl_div);
   form.appendChild(btn_div);
   body.appendChild(form);
-  body.appendChild(progress);
-  body.appendChild(canvas);
+  body.appendChild(progressPainter.element);
+  body.appendChild(chartPainter.element);
   body.appendChild(textArea);
   say('Initialized');
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./estimator.js":5,"./html_escape.js":6,"./vk_api.js":11,"./vk_request.js":12}],8:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./html_escape.js":5,"./progress_estimator.js":10,"./progress_painter.js":11,"./vk_api.js":13,"./vk_request.js":14}],7:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -15863,7 +15822,7 @@ document.addEventListener('DOMContentLoaded', () => {
   return src;
 });
 
-},{"moment":10}],10:[function(require,module,exports){
+},{"moment":9}],9:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -20467,7 +20426,102 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })));
 
+},{}],10:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ProgressEstimator = void 0;
+
+class ProgressEstimator {
+  constructor(serverNow, timeLimit, painter) {
+    this._offsets = {};
+    this._totalDone = 0;
+    this._totalTodo = 0;
+    this._latestSeen = Infinity;
+    this._serverNow = serverNow;
+    this._timeLimit = timeLimit;
+    this._painter = painter;
+  }
+
+  handleAdd(value) {
+    this._totalDone += value.offset;
+    this._totalTodo += value.total;
+    if (value.offset !== 0 && value.offset !== value.total) this._offsets[value.id] = value.offset;
+    if (!value.pinned) this._latestSeen = Math.min(this._latestSeen, value.date);
+  }
+
+  handleUpdate(value) {
+    const {
+      id,
+      offset
+    } = value;
+    const delta = offset - (this._offsets[id] || 0);
+    this._totalDone += delta;
+    if (offset === value.total) delete this._offsets[id];else this._offsets[id] = offset;
+  }
+
+  handleFlush() {
+    const numerator = this._totalDone;
+    const denominator = this._totalTodo / (this._serverNow - this._latestSeen) * this._timeLimit;
+    const ratio = numerator / denominator;
+    if (isNaN(ratio)) this._painter.setUnknown();else this._painter.setRatio(ratio < 0 ? 0 : ratio > 1 ? 1 : ratio);
+  }
+
+}
+
+exports.ProgressEstimator = ProgressEstimator;
+
 },{}],11:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ProgressPainter = void 0;
+const MAX_VALUE = 1000;
+
+class ProgressPainter {
+  constructor() {
+    this._element = document.createElement('progress');
+
+    this._element.setAttribute('max', MAX_VALUE);
+  }
+
+  get element() {
+    return this._element;
+  }
+
+  setUnknown() {
+    this._element.setAttribute('value', '');
+  }
+
+  setRatio(ratio) {
+    this._element.setAttribute('value', String(Math.round(ratio * MAX_VALUE)));
+  }
+
+}
+
+exports.ProgressPainter = ProgressPainter;
+
+},{}],12:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.sleepMillis = exports.monotonicNowMillis = void 0;
+
+const monotonicNowMillis = () => window.performance.now();
+
+exports.monotonicNowMillis = monotonicNowMillis;
+
+const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+exports.sleepMillis = sleepMillis;
+
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20476,6 +20530,8 @@ Object.defineProperty(exports, "__esModule", {
 exports.VkApiSession = exports.VkApiCancellation = exports.VkApiError = void 0;
 
 var _vk_request = require("./vk_request.js");
+
+var _time_utils = require("./time_utils.js");
 
 class VkApiError extends Error {
   constructor(code, msg) {
@@ -20488,10 +20544,6 @@ class VkApiError extends Error {
 }
 
 exports.VkApiError = VkApiError;
-
-const monotonicNowMillis = () => window.performance.now();
-
-const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 class VkApiCancellation extends Error {
   constructor() {
@@ -20525,13 +20577,13 @@ class VkApiSession {
     while (ms >= MAX_LAG) {
       this._maybeThrowForCancel();
 
-      await sleepMillis(MAX_LAG);
+      await (0, _time_utils.sleepMillis)(MAX_LAG);
       ms -= MAX_LAG;
     }
 
     this._maybeThrowForCancel();
 
-    await sleepMillis(ms);
+    await (0, _time_utils.sleepMillis)(ms);
   }
 
   cancel() {
@@ -20555,13 +20607,13 @@ class VkApiSession {
 
   async _apiRequestNoRateLimit(method, params) {
     if (this._accessToken === null) throw 'Access token was not set for this VkApiSession instance';
-    const now = monotonicNowMillis();
+    const now = (0, _time_utils.monotonicNowMillis)();
     const delay = now - this._lastRequestTimestamp;
     if (delay < MIN_DELAY_MILLIS) await this._sleepMillis(MIN_DELAY_MILLIS - delay);
 
     this._maybeThrowForCancel();
 
-    this._lastRequestTimestamp = monotonicNowMillis();
+    this._lastRequestTimestamp = (0, _time_utils.monotonicNowMillis)();
     let result;
 
     try {
@@ -20620,7 +20672,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./vk_request.js":12}],12:[function(require,module,exports){
+},{"./time_utils.js":12,"./vk_request.js":14}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20702,4 +20754,4 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":8}]},{},[7]);
+},{"@vkontakte/vk-connect":7}]},{},[6]);
