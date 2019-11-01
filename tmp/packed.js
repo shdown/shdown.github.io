@@ -222,25 +222,25 @@ const findPosts = async config => {
       continue;
     }
 
-    const decreaseAmounts = {};
+    const amountsById = {};
 
     for (let i = 0; i < chunk.length; ++i) {
       const datum = chunk[i];
       const posterIds = result[i];
-      if (decreaseAmounts[datum.id] === Infinity) continue;
+      const oldAmount = amountsById[datum.id] || 0;
 
       if (posterIds.indexOf(config.uid) !== -1) {
         config.callback('found', {
           postId: datum.id,
           offset: datum.offset
         });
-        decreaseAmounts[datum.id] = Infinity;
+        amountsById[datum.id] = Infinity;
       } else {
-        decreaseAmounts[datum.id] += MAX_COMMENTS;
+        amountsById[datum.id] = oldAmount + MAX_COMMENTS;
       }
     }
 
-    hotGroup.decreaseCurrent(decreaseAmounts);
+    hotGroup.decreaseCurrent(amountsById);
   }
 };
 
