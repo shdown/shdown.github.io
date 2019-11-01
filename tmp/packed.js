@@ -61,7 +61,7 @@ class Reader {
         // TODO pass the datum to the callback
         this._config.callback('found', {
           postId: datum.id,
-          commentNo: 0
+          offset: -1
         });
 
         value.offset = value.total;
@@ -130,16 +130,26 @@ class HotGroup {
     return this._hotArray;
   }
 
-  decreaseCurrent(byAmounts) {
+  decreaseCurrent(amountsById) {
     const newHotArray = [];
 
     for (let i = 0; i < this._hotArray.length; ++i) {
       const value = this._hotArray[i];
-      value.offset += byAmounts[i];
+      const amount = amountsById[value.id];
+      let expellThis = false;
 
-      this._config.callback('infoUpdate', value);
+      if (amount !== undefined && amount !== 0) {
+        value.offset += amount;
 
-      if (value.offset !== value.total) newHotArray.push(value);
+        if (value.offset >= value.total) {
+          value.offset = value.total;
+          expellThis = true;
+        }
+
+        this._config.callback('infoUpdate', value);
+      }
+
+      if (!expellThis) newHotArray.push(value);
     }
 
     this._config.callback('infoFlush', null);
@@ -149,19 +159,44 @@ class HotGroup {
 
 }
 
+const MAX_COMMENTS = 100;
+const MAX_REQUESTS_IN_EXECUTE = 25;
+
+const scheduleChunk = hotArray => {
+  const result = [];
+
+  for (let offsetSummand = 0;; offsetSummand += MAX_COMMENTS) {
+    let pushedSomething = false;
+
+    for (const value of hotArray) {
+      const currentOffset = value.offset + offsetSummand;
+      if (currentOffset >= value.total) continue;
+      result.push({
+        id: value.id,
+        offset: currentOffset
+      });
+      pushedSomething = true;
+      if (result.length === MAX_REQUESTS_IN_EXECUTE) break;
+    }
+
+    if (!pushedSomething || result.length === MAX_REQUESTS_IN_EXECUTE) break;
+  }
+
+  return result;
+};
+
 const findPosts = async config => {
-  const MAX_COMMENTS = 100;
-  const MAX_REQUESTS_IN_EXECUTE = 25;
   const reader = new Reader(config);
   const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
 
   while (true) {
     const hotArray = await hotGroup.getCurrent();
     if (hotArray.length === 0) break;
+    const chunk = scheduleChunk(hotArray);
     let code = `var i = 0, r = [];`;
-    code += `var d = [${hotArray.map(value => value.id).join(',')}];`;
-    code += `var o = [${hotArray.map(value => value.offset).join(',')}];`;
-    code += `while (i < ${hotArray.length}) {`;
+    code += `var d = [${chunk.map(datum => datum.id).join(',')}];`;
+    code += `var o = [${chunk.map(datum => datum.offset).join(',')}];`;
+    code += `while (i < ${chunk.length}) {`;
     code += ` r.push(API.wall.getComments({`;
     code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
     code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
@@ -178,30 +213,30 @@ const findPosts = async config => {
       });
     } catch (err) {
       if (!(err instanceof _vk_api.VkApiError)) throw err;
-      await config.rethrowOrIgnore(err); // skip the first one
+      await config.rethrowOrIgnore(err); // skip the first post
 
-      const decreaseAmounts = Array(hotArray.length).fill(0);
-      decreaseAmounts[0] = hotArray[0].total - hotArray[0].offset;
-      hotGroup.decreaseCurrent(decreaseAmounts);
+      const datum = chunk[0];
+      const amountsById = {};
+      amountsById[datum.id] = Infinity;
+      hotGroup.decreaseCurrent(amountsById);
       continue;
     }
 
-    const decreaseAmounts = Array(hotArray.length);
+    const decreaseAmounts = {};
 
-    for (let i = 0; i < hotArray.length; ++i) {
-      const value = hotArray[i];
+    for (let i = 0; i < chunk.length; ++i) {
+      const datum = chunk[i];
       const posterIds = result[i];
-      const leftToCheck = value.total - value.offset;
+      if (decreaseAmounts[datum.id] === Infinity) continue;
 
       if (posterIds.indexOf(config.uid) !== -1) {
-        // TODO fetch the post manually
         config.callback('found', {
-          postId: value.id,
-          commentNo: -1
+          postId: datum.id,
+          offset: datum.offset
         });
-        decreaseAmounts[i] = leftToCheck;
+        decreaseAmounts[datum.id] = Infinity;
       } else {
-        decreaseAmounts[i] = Math.min(MAX_COMMENTS, leftToCheck);
+        decreaseAmounts[datum.id] += MAX_COMMENTS;
       }
     }
 
