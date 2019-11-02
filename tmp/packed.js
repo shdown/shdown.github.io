@@ -246,6 +246,8 @@ const findPosts = async config => {
 
 exports.findPosts = findPosts;
 
+const divCeil = (a, b) => Math.ceil(a / b);
+
 const gatherStats = async config => {
   const result = {};
   const oids = config.oids;
@@ -271,22 +273,31 @@ const gatherStats = async config => {
       const ownerId = batch[i];
       let totalComments = 0;
       let earliestTimestamp = Infinity;
+      let latestTimestamp = -Infinity;
 
       for (const post of ownerDatum.items) {
         const isPinned = post.is_pinned;
         if (post.date < (void 0)._config.sinceTimestamp && !isPinned) break;
         if (isPinned && config.ignorePinned) continue;
         totalComments += post.comments.count;
-        if (!isPinned) earliestTimestamp = Math.min(earliestTimestamp, post.date);
+
+        if (!isPinned) {
+          earliestTimestamp = Math.min(earliestTimestamp, post.date);
+          latestTimestamp = Math.max(latestTimestamp, post.date);
+        }
       }
 
       result[ownerId] = {
-        totalComments: totalComments,
-        earliestTimestamp: earliestTimestamp
+        timeSpan: latestTimestamp - earliestTimestamp,
+        totalComments: totalComments
       };
     }
 
     offset += batchSize;
+    config.callback('progress', {
+      numerator: divCeil(offset, MAX_REQUESTS_IN_EXECUTE),
+      denominator: divCeil(oids.length, MAX_REQUESTS_IN_EXECUTE)
+    });
   }
 
   return result;
@@ -294,7 +305,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./vk_api.js":13}],2:[function(require,module,exports){
+},{"./vk_api.js":14}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -538,7 +549,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./time_utils.js":12,"chart.js":8}],4:[function(require,module,exports){
+},{"./time_utils.js":13,"chart.js":8}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -597,29 +608,39 @@ var _progress_painter = require("./progress_painter.js");
 
 var _time_utils = require("./time_utils.js");
 
+var _stats_storage = require("./stats_storage.js");
+
+const makeCallbackDispatcher = callbacks => {
+  return (what, arg) => {
+    const fn = callbacks[what];
+    if (fn === undefined) console.log(`No callback for "${what}": ${JSON.stringify(arg)}`);else fn(arg);
+  };
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
+  const statsStorage = new _stats_storage.StatsStorage();
   const progressPainter = new _progress_painter.ProgressPainter();
   progressPainter.element.style = 'display: block; width: 100%;';
   const chartPainter = new _chart_painter.ChartPainter();
-  const textArea = document.createElement('div');
-  const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
+  const textElement = document.createElement('div');
   const session = new _vk_api.VkApiSession();
 
   const setMode = mode => {
-    progressPainter.setUnknown();
+    progressPainter.reset();
+    chartPainter.reset();
     const chartElement = chartPainter.element;
 
     switch (mode) {
       case 'chart':
         chartElement.style.display = 'block';
-        textArea.style.display = 'none';
+        textElement.style.display = 'none';
         break;
 
       case 'text':
         chartElement.style.display = 'none';
-        textArea.style.display = 'block';
+        textElement.style.display = 'block';
         break;
 
       default:
@@ -662,8 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return result.access_token;
   };
 
-  const work = async (uid, gid, timeLimitDays) => {
-    chartPainter.reset();
+  const work = async (uid, gids, timeLimitDays) => {
     session.setAccessToken((await getAccessToken('')));
     session.setRateLimitCallback(reason => {
       say(`We are being too fast (${reason})!`);
@@ -674,41 +694,87 @@ document.addEventListener('DOMContentLoaded', () => {
       v: '5.101'
     });
     const timeLimit = timeLimitDays * 24 * 60 * 60;
-    const estimator = new _progress_estimator.ProgressEstimator(serverTime, timeLimit, progressPainter);
-    const callbacks = {
-      found: datum => {
-        say(`FOUND: https://vk.com/wall${gid}_${datum.postId}`);
-      },
-      infoAdd: datum => {
-        chartCtl.handleAdd(datum);
-        estimator.handleAdd(datum);
-      },
-      infoUpdate: datum => {
-        chartCtl.handleUpdate(datum);
-        estimator.handleUpdate(datum);
-      },
-      infoFlush: _ => {
-        chartCtl.handleFlush();
-        estimator.handleFlush();
+    const sinceTimestamp = serverTime - timeLimit; // TODO check for duplicates in 'gids'
+
+    const oidsToStats = {};
+    {
+      const oidsToGatherStats = [];
+
+      for (const oid of gids) {
+        const stats = statsStorage.getStats(oid);
+        if (stats === undefined) oidsToGatherStats.push(oid);else oidsToStats[oid] = stats;
       }
-    };
-    const config = {
-      session: session,
-      oid: gid,
-      uid: uid,
-      sinceTimestamp: serverTime - timeLimit,
-      rethrowOrIgnore: async err => {
-        // TODO
-        throw err;
-      },
-      ignorePinned: false,
-      callback: (what, arg) => {
-        const fn = callbacks[what];
-        if (fn) fn(arg);else say(`No callback for "${what}": ${JSON.stringify(arg)}`);
+
+      const gatherResults = await (0, _algo.gatherStats)({
+        oids: oidsToGatherStats,
+        session: session,
+        sinceTimestamp: sinceTimestamp,
+        ignorePinned: false,
+        callback: makeCallbackDispatcher({
+          progress: datum => {
+            progressPainter.setRatio(datum.numerator / datum.denominator);
+          }
+        })
+      });
+      progressPainter.reset();
+
+      for (const oid in gatherResults) {
+        const stats = gatherResults[oid];
+        statsStorage.setStats(oid, stats);
+        oidsToStats[oid] = stats;
       }
-    };
-    say('Transferring control to findPosts()...');
-    await (0, _algo.findPosts)(config);
+    }
+    let implicitNumerator = 0;
+    let implicitDenominator = 0;
+
+    for (const oid in oidsToStats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid]);
+
+    for (const oid of gids) {
+      const estimator = new _progress_estimator.ProgressEstimator(timeLimit);
+      chartPainter.reset();
+      const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
+      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid]);
+      const callbacks = {
+        found: datum => {
+          say(`FOUND: https://vk.com/wall${oid}_${datum.postId}`);
+        },
+        infoAdd: datum => {
+          chartCtl.handleAdd(datum);
+          estimator.handleAdd(datum);
+        },
+        infoUpdate: datum => {
+          chartCtl.handleUpdate(datum);
+          estimator.handleUpdate(datum);
+        },
+        infoFlush: _ => {
+          chartCtl.handleFlush();
+          const explicitNumerator = estimator.getDoneCommentsNumber();
+
+          const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(estimator.getStats());
+
+          const numerator = explicitNumerator + implicitNumerator;
+          const denominator = explicitDenominator + implicitDenominator;
+          progressPainter.setRatio(numerator / denominator);
+        }
+      };
+      say('Transferring control to findPosts()...');
+      await (0, _algo.findPosts)({
+        session: session,
+        oid: oid,
+        uid: uid,
+        sinceTimestamp: sinceTimestamp,
+        rethrowOrIgnore: async err => {
+          // TODO
+          throw err;
+        },
+        ignorePinned: false,
+        callback: makeCallbackDispatcher(callbacks)
+      });
+      const commentsChecked = estimator.getDoneCommentsNumber();
+      implicitNumerator += commentsChecked;
+      implicitDenominator += commentsChecked;
+      statsStorage.setStats(oid, estimator.getStats());
+    }
   };
 
   const form = document.createElement('form');
@@ -719,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
   uid_input.setAttribute('type', 'number');
   uid_input.setAttribute('required', '1');
   const gid_div = document.createElement('span');
-  gid_div.innerHTML = 'Group ID: ';
+  gid_div.innerHTML = 'Group ID(s): ';
   const gid_input = document.createElement('input');
   gid_input.style.width = '15%';
   gid_input.setAttribute('type', 'number');
@@ -745,19 +811,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   form.onsubmit = () => {
     const uid = parseInt(uid_input.value);
-    const gid = parseInt(gid_input.value);
+    const gids = gid_input.value.split(',').map(s => parseInt(s));
     const tl = parseFloat(tl_input.value);
     setMode('chart');
     const startTime = (0, _time_utils.monotonicNowMillis)();
-    work(uid, gid, tl).then(() => {
+    work(uid, gids, tl).then(() => {
       say('Done...');
       setMode('text');
-      textArea.innerHTML = `Done, took ${((0, _time_utils.monotonicNowMillis)() - startTime) / 1000} s.`;
+      const seconds = ((0, _time_utils.monotonicNowMillis)() - startTime) / 1000;
+      textElement.innerHTML = `Done, took ${Math.round(seconds)} s.`;
     }).catch(err => {
       // TODO check if it's cancellation
       say('Error...');
       setMode('text');
-      textArea.innerHTML = (0, _html_escape.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
+      textElement.innerHTML = (0, _html_escape.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
       console.log(err);
     }); // Do not reload the page!
 
@@ -776,11 +843,11 @@ document.addEventListener('DOMContentLoaded', () => {
   body.appendChild(form);
   body.appendChild(progressPainter.element);
   body.appendChild(chartPainter.element);
-  body.appendChild(textArea);
+  body.appendChild(textElement);
   say('Initialized');
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./html_escape.js":5,"./progress_estimator.js":10,"./progress_painter.js":11,"./time_utils.js":12,"./vk_api.js":13,"./vk_request.js":14}],7:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./html_escape.js":5,"./progress_estimator.js":10,"./progress_painter.js":11,"./stats_storage.js":12,"./time_utils.js":13,"./vk_api.js":14,"./vk_request.js":15}],7:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -20532,20 +20599,24 @@ Object.defineProperty(exports, "__esModule", {
 exports.ProgressEstimator = void 0;
 
 class ProgressEstimator {
-  constructor(config, painter) {
+  constructor(timeLimit) {
     this._offsets = {};
     this._totalDone = 0;
     this._totalTodo = 0;
     this._earliestTimestamp = Infinity;
-    this._config = config;
-    this._painter = painter;
+    this._latestTimestamp = -Infinity;
+    this._timeLimit = timeLimit;
   }
 
   handleAdd(value) {
     this._totalDone += value.offset;
     this._totalTodo += value.total;
     if (value.offset !== 0 && value.offset !== value.total) this._offsets[value.id] = value.offset;
-    if (!value.pinned) this._earliestTimestamp = Math.min(this._earliestTimestamp, value.date);
+
+    if (!value.pinned) {
+      this._earliestTimestamp = Math.min(this._earliestTimestamp, value.date);
+      this._latestTimestamp = Math.max(this._latestTimestamp, value.date);
+    }
   }
 
   handleUpdate(value) {
@@ -20558,19 +20629,19 @@ class ProgressEstimator {
     if (offset === value.total) delete this._offsets[id];else this._offsets[id] = offset;
   }
 
-  handleFlush() {
-    const numerator = this._totalDone;
-    const expectedCommentsPerSecond = this._totalTodo / (this._config.serverNow - this._earliestTimestamp);
-    const denominator = this._totalTodo / expectedCommentsPerSecond * this._config.timeLimit;
-
-    this._painter.setRatio(numerator, denominator);
-  }
-
   getStats() {
     return {
-      earliestTimestamp: this._earliestTimestamp,
+      timeSpan: this._latestTimestamp - this._earliestTimestamp,
       totalComments: this._totalTodo
     };
+  }
+
+  getDoneCommentsNumber() {
+    return this._totalDone;
+  }
+
+  static statsToExpectedCommentsCount(stats, timeLimit) {
+    return stats.totalComments / stats.timeSpan * timeLimit;
   }
 
 }
@@ -20597,21 +20668,12 @@ class ProgressPainter {
     return this._element;
   }
 
-  setUnknown() {
+  reset() {
     this._element.setAttribute('value', '');
   }
 
-  setRatio(numerator, denominator) {
-    let ratio = numerator / denominator;
-
-    if (isNaN(ratio)) {
-      this.setUnknown();
-    } else {
-      if (ratio < 0) ratio = 0;
-      if (ratio > 1) ratio = 1;
-
-      this._element.setAttribute('value', String(Math.round(ratio * MAX_VALUE)));
-    }
+  setRatio(ratio) {
+    this._element.setAttribute('value', String(Math.round(ratio * MAX_VALUE)));
   }
 
 }
@@ -20619,6 +20681,31 @@ class ProgressPainter {
 exports.ProgressPainter = ProgressPainter;
 
 },{}],12:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.StatsStorage = void 0;
+
+class StatsStorage {
+  constructor() {
+    this._data = {};
+  }
+
+  getStats(ownerId) {
+    return this._data[ownerId];
+  }
+
+  setStats(ownerId, stats) {
+    this._data[ownerId] = stats;
+  }
+
+}
+
+exports.StatsStorage = StatsStorage;
+
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20634,7 +20721,7 @@ const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 exports.sleepMillis = sleepMillis;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20785,7 +20872,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./time_utils.js":12,"./vk_request.js":14}],14:[function(require,module,exports){
+},{"./time_utils.js":13,"./vk_request.js":15}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
