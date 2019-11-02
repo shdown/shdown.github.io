@@ -711,7 +711,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
       const callbacks = {
         found: datum => {
-          say(`FOUND: https://vk.com/wall${oid}_${datum.postId}`);
+          const link = `https://vk.com/wall${oid}_${datum.postId}`;
+          console.log(`FOUND: ${link}`);
+          const a = document.createElement('a');
+          a.style.display = 'block';
+          a.setAttribute('href', link);
+          a.innerHTML = (0, _utils.htmlEscape)(link);
+          textElement.appendChild(a);
         },
         infoAdd: datum => {
           chartCtl.handleAdd(datum);
@@ -821,12 +827,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const gids = gid_input.value.split(',').map(s => parseInt(s));
     const tl = parseFloat(tl_input.value);
     setMode('chart');
+    textElement.innerHTML = '';
     const startTime = (0, _utils.monotonicNowMillis)();
     work(uid, gids, tl).then(() => {
       say('Done...');
       setMode('text');
       const seconds = ((0, _utils.monotonicNowMillis)() - startTime) / 1000;
-      textElement.innerHTML = `Done, took ${Math.round(seconds)} s.`;
+      textElement.append(`<br/>Done, took ${Math.round(seconds)} s.`);
     }).catch(err => {
       // TODO check if it's cancellation
       say('Error...');
