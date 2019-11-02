@@ -8,6 +8,8 @@ exports.gatherStats = exports.findPosts = void 0;
 
 var _vk_api = require("./vk_api.js");
 
+var _utils = require("./utils.js");
+
 const MAX_POSTS = 100;
 const MAX_COMMENTS = 100;
 const MAX_REQUESTS_IN_EXECUTE = 25;
@@ -246,8 +248,6 @@ const findPosts = async config => {
 
 exports.findPosts = findPosts;
 
-const divCeil = (a, b) => Math.ceil(a / b);
-
 const gatherStats = async config => {
   const result = {};
   const oids = config.oids;
@@ -295,8 +295,8 @@ const gatherStats = async config => {
 
     offset += batchSize;
     config.callback('progress', {
-      numerator: divCeil(offset, MAX_REQUESTS_IN_EXECUTE),
-      denominator: divCeil(oids.length, MAX_REQUESTS_IN_EXECUTE)
+      numerator: (0, _utils.divCeil)(offset, MAX_REQUESTS_IN_EXECUTE),
+      denominator: (0, _utils.divCeil)(oids.length, MAX_REQUESTS_IN_EXECUTE)
     });
   }
 
@@ -305,7 +305,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./vk_api.js":14}],2:[function(require,module,exports){
+},{"./utils.js":12,"./vk_api.js":13}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -396,11 +396,7 @@ exports.ChartPainter = void 0;
 
 var _chart = require("chart.js");
 
-var _time_utils = require("./time_utils.js");
-
-const clearArray = array => {
-  array.splice(0, array.length);
-};
+var _utils = require("./utils.js");
 
 const BG_COLOR = 'rgba(230,230,230,0.3)'; // https://mycolor.space/?hex=%234A76A8&sub=1
 
@@ -506,7 +502,7 @@ class ChartPainter {
   }
 
   _repaint() {
-    this._lastRepaintTimestamp = (0, _time_utils.monotonicNowMillis)();
+    this._lastRepaintTimestamp = (0, _utils.monotonicNowMillis)();
 
     this._chart.update({
       duration: UPDATE_DURATION_MILLIS
@@ -524,7 +520,7 @@ class ChartPainter {
   flush() {
     if (this._repaintTimerId !== null) return;
 
-    const interval = (0, _time_utils.monotonicNowMillis)() - this._lastRepaintTimestamp;
+    const interval = (0, _utils.monotonicNowMillis)() - this._lastRepaintTimestamp;
 
     if (interval < MIN_INTERVAL_MILLIS) this._scheduleRepaint(MIN_INTERVAL_MILLIS - interval);else this._repaint();
   }
@@ -535,12 +531,12 @@ class ChartPainter {
       this._repaintTimerId = null;
     }
 
-    clearArray(this._chart.data.labels);
-    clearArray(this._chart.data.datasets[0].data);
-    clearArray(this._chart.data.datasets[1].data);
-    clearArray(this._chart.data.datasets[0].backgroundColor);
-    clearArray(this._chart.data.datasets[1].backgroundColor);
-    clearArray(this._fgIndices);
+    (0, _utils.clearArray)(this._chart.data.labels);
+    (0, _utils.clearArray)(this._chart.data.datasets[0].data);
+    (0, _utils.clearArray)(this._chart.data.datasets[1].data);
+    (0, _utils.clearArray)(this._chart.data.datasets[0].backgroundColor);
+    (0, _utils.clearArray)(this._chart.data.datasets[1].backgroundColor);
+    (0, _utils.clearArray)(this._fgIndices);
 
     this._repaint();
   }
@@ -549,7 +545,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./time_utils.js":13,"chart.js":8}],4:[function(require,module,exports){
+},{"./utils.js":12,"chart.js":7}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -564,35 +560,9 @@ exports.config = config;
 },{}],5:[function(require,module,exports){
 "use strict";
 
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.htmlEscape = void 0;
-const entityMap = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-  '/': '&#x2F;',
-  '`': '&#x60;',
-  '=': '&#x3D;'
-};
-
-const htmlEscape = s => {
-  return String(s).replace(/[&<>"'`=\/]/g, c => entityMap[c]);
-};
-
-exports.htmlEscape = htmlEscape;
-
-},{}],6:[function(require,module,exports){
-"use strict";
-
 var _vk_request = require("./vk_request.js");
 
 var _vk_api = require("./vk_api.js");
-
-var _html_escape = require("./html_escape.js");
 
 var _config = require("./config.js");
 
@@ -606,7 +576,7 @@ var _progress_estimator = require("./progress_estimator.js");
 
 var _progress_painter = require("./progress_painter.js");
 
-var _time_utils = require("./time_utils.js");
+var _utils = require("./utils.js");
 
 var _stats_storage = require("./stats_storage.js");
 
@@ -683,6 +653,38 @@ document.addEventListener('DOMContentLoaded', () => {
     return result.access_token;
   };
 
+  const resolveStatsFor = async (oids, sinceTimestamp) => {
+    const result = {};
+    const oidsToGatherStats = [];
+
+    for (const oid of oids) {
+      const stats = statsStorage.getStats(oid);
+      if (stats === undefined) oidsToGatherStats.push(oid);else result[oid] = stats;
+    }
+
+    progressPainter.setRatio(0);
+    const gatherResults = await (0, _algo.gatherStats)({
+      oids: oidsToGatherStats,
+      session: session,
+      sinceTimestamp: sinceTimestamp,
+      ignorePinned: false,
+      callback: makeCallbackDispatcher({
+        progress: datum => {
+          progressPainter.setRatio(datum.numerator / datum.denominator);
+        }
+      })
+    });
+    progressPainter.reset();
+
+    for (const oid in gatherResults) {
+      const stats = gatherResults[oid];
+      statsStorage.setStats(oid, stats);
+      result[oid] = stats;
+    }
+
+    return result;
+  };
+
   const work = async (uid, gids, timeLimitDays) => {
     session.setAccessToken((await getAccessToken('')));
     session.setRateLimitCallback(reason => {
@@ -696,34 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const timeLimit = timeLimitDays * 24 * 60 * 60;
     const sinceTimestamp = serverTime - timeLimit; // TODO check for duplicates in 'gids'
 
-    const oidsToStats = {};
-    {
-      const oidsToGatherStats = [];
-
-      for (const oid of gids) {
-        const stats = statsStorage.getStats(oid);
-        if (stats === undefined) oidsToGatherStats.push(oid);else oidsToStats[oid] = stats;
-      }
-
-      const gatherResults = await (0, _algo.gatherStats)({
-        oids: oidsToGatherStats,
-        session: session,
-        sinceTimestamp: sinceTimestamp,
-        ignorePinned: false,
-        callback: makeCallbackDispatcher({
-          progress: datum => {
-            progressPainter.setRatio(datum.numerator / datum.denominator);
-          }
-        })
-      });
-      progressPainter.reset();
-
-      for (const oid in gatherResults) {
-        const stats = gatherResults[oid];
-        statsStorage.setStats(oid, stats);
-        oidsToStats[oid] = stats;
-      }
-    }
+    const oidsToStats = await resolveStatsFor(gids, sinceTimestamp);
     let implicitNumerator = 0;
     let implicitDenominator = 0;
 
@@ -777,6 +752,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const getSubs = async uid => {
+    session.setAccessToken((await getAccessToken('')));
+    session.setRateLimitCallback(reason => {
+      say(`We are being too fast (${reason})!`);
+    });
+    const resp = await session.apiRequest('users.getSubscriptions', {
+      user_id: uid,
+      v: '5.103'
+    });
+    const result = [];
+
+    for (const id of resp.users.items) result.push(id);
+
+    for (const id of resp.groups.items) result.push(-id);
+
+    return result;
+  };
+
   const form = document.createElement('form');
   const uid_div = document.createElement('span');
   uid_div.innerHTML = 'User ID: ';
@@ -809,22 +802,36 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   };
 
+  const subsBtn = document.createElement('input');
+  subsBtn.setAttribute('type', 'button');
+  subsBtn.setAttribute('value', 'Get subs');
+
+  subsBtn.onclick = () => {
+    const uid = parseInt(uid_input.value);
+    getSubs(uid).then(gids => gid_input.value = gids.join(',')).catch(err => {
+      alert('Error!'); // TODO
+
+      console.log(err);
+    });
+    return false;
+  };
+
   form.onsubmit = () => {
     const uid = parseInt(uid_input.value);
     const gids = gid_input.value.split(',').map(s => parseInt(s));
     const tl = parseFloat(tl_input.value);
     setMode('chart');
-    const startTime = (0, _time_utils.monotonicNowMillis)();
+    const startTime = (0, _utils.monotonicNowMillis)();
     work(uid, gids, tl).then(() => {
       say('Done...');
       setMode('text');
-      const seconds = ((0, _time_utils.monotonicNowMillis)() - startTime) / 1000;
+      const seconds = ((0, _utils.monotonicNowMillis)() - startTime) / 1000;
       textElement.innerHTML = `Done, took ${Math.round(seconds)} s.`;
     }).catch(err => {
       // TODO check if it's cancellation
       say('Error...');
       setMode('text');
-      textElement.innerHTML = (0, _html_escape.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
+      textElement.innerHTML = (0, _utils.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
       console.log(err);
     }); // Do not reload the page!
 
@@ -840,6 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
   form.appendChild(gid_div);
   form.appendChild(tl_div);
   form.appendChild(btn_div);
+  form.appendChild(subsBtn);
   body.appendChild(form);
   body.appendChild(progressPainter.element);
   body.appendChild(chartPainter.element);
@@ -847,12 +855,12 @@ document.addEventListener('DOMContentLoaded', () => {
   say('Initialized');
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./html_escape.js":5,"./progress_estimator.js":10,"./progress_painter.js":11,"./stats_storage.js":12,"./time_utils.js":13,"./vk_api.js":14,"./vk_request.js":15}],7:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_request.js":14}],6:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],8:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -15986,7 +15994,7 @@ document.addEventListener('DOMContentLoaded', () => {
   return src;
 });
 
-},{"moment":9}],9:[function(require,module,exports){
+},{"moment":8}],8:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -20590,7 +20598,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })));
 
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20648,7 +20656,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20680,7 +20688,7 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20705,13 +20713,13 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{}],13:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.htmlEscape = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -20721,7 +20729,33 @@ const sleepMillis = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 exports.sleepMillis = sleepMillis;
 
-},{}],14:[function(require,module,exports){
+const divCeil = (a, b) => Math.ceil(a / b);
+
+exports.divCeil = divCeil;
+
+const clearArray = array => {
+  array.splice(0, array.length);
+};
+
+exports.clearArray = clearArray;
+const htmlEntityMap = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '/': '&#x2F;',
+  '`': '&#x60;',
+  '=': '&#x3D;'
+};
+
+const htmlEscape = s => {
+  return String(s).replace(/[&<>"'`=\/]/g, c => htmlEntityMap[c]);
+};
+
+exports.htmlEscape = htmlEscape;
+
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20731,7 +20765,7 @@ exports.VkApiSession = exports.VkApiCancellation = exports.VkApiError = void 0;
 
 var _vk_request = require("./vk_request.js");
 
-var _time_utils = require("./time_utils.js");
+var _utils = require("./utils.js");
 
 class VkApiError extends Error {
   constructor(code, msg) {
@@ -20777,13 +20811,13 @@ class VkApiSession {
     while (ms >= MAX_LAG) {
       this._maybeThrowForCancel();
 
-      await (0, _time_utils.sleepMillis)(MAX_LAG);
+      await (0, _utils.sleepMillis)(MAX_LAG);
       ms -= MAX_LAG;
     }
 
     this._maybeThrowForCancel();
 
-    await (0, _time_utils.sleepMillis)(ms);
+    await (0, _utils.sleepMillis)(ms);
   }
 
   cancel() {
@@ -20807,13 +20841,13 @@ class VkApiSession {
 
   async _apiRequestNoRateLimit(method, params) {
     if (this._accessToken === null) throw 'Access token was not set for this VkApiSession instance';
-    const now = (0, _time_utils.monotonicNowMillis)();
+    const now = (0, _utils.monotonicNowMillis)();
     const delay = now - this._lastRequestTimestamp;
     if (delay < MIN_DELAY_MILLIS) await this._sleepMillis(MIN_DELAY_MILLIS - delay);
 
     this._maybeThrowForCancel();
 
-    this._lastRequestTimestamp = (0, _time_utils.monotonicNowMillis)();
+    this._lastRequestTimestamp = (0, _utils.monotonicNowMillis)();
     let result;
 
     try {
@@ -20872,7 +20906,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./time_utils.js":13,"./vk_request.js":15}],15:[function(require,module,exports){
+},{"./utils.js":12,"./vk_request.js":14}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20954,4 +20988,4 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":7}]},{},[6]);
+},{"@vkontakte/vk-connect":6}]},{},[5]);
