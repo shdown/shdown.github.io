@@ -277,7 +277,7 @@ const gatherStats = async config => {
 
       for (const post of ownerDatum.items) {
         const isPinned = post.is_pinned;
-        if (post.date < (void 0)._config.sinceTimestamp && !isPinned) break;
+        if (post.date < config.sinceTimestamp && !isPinned) break;
         if (isPinned && config.ignorePinned) continue;
         totalComments += post.comments.count;
 
@@ -727,13 +727,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let implicitNumerator = 0;
     let implicitDenominator = 0;
 
-    for (const oid in oidsToStats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid]);
+    for (const oid in oidsToStats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid], timeLimit);
 
     for (const oid of gids) {
+      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid], timeLimit);
       const estimator = new _progress_estimator.ProgressEstimator(timeLimit);
       chartPainter.reset();
       const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
-      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid]);
       const callbacks = {
         found: datum => {
           say(`FOUND: https://vk.com/wall${oid}_${datum.postId}`);
@@ -750,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
           chartCtl.handleFlush();
           const explicitNumerator = estimator.getDoneCommentsNumber();
 
-          const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(estimator.getStats());
+          const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(estimator.getStats(), timeLimit);
 
           const numerator = explicitNumerator + implicitNumerator;
           const denominator = explicitDenominator + implicitDenominator;
@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
   gid_div.innerHTML = 'Group ID(s): ';
   const gid_input = document.createElement('input');
   gid_input.style.width = '15%';
-  gid_input.setAttribute('type', 'number');
+  gid_input.setAttribute('type', 'text');
   gid_input.setAttribute('required', '1');
   const tl_div = document.createElement('span');
   tl_div.innerHTML = 'Time limit (days): ';
