@@ -4,7 +4,7 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.gatherStats = exports.findPosts = exports.isEPERM = void 0;
+exports.gatherStats = exports.findPosts = void 0;
 
 var _vk_api = require("./vk_api.js");
 
@@ -227,8 +227,6 @@ const executeBatch = async (config, hotArray) => {
 
 const isEPERM = err => err.code === 7;
 
-exports.isEPERM = isEPERM;
-
 const findPosts = async config => {
   const reader = new Reader(config);
   const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
@@ -249,10 +247,12 @@ const findPosts = async config => {
         amountsById = await executeBatch(config, [firstValue]);
       } catch (err2) {
         if (!(err2 instanceof _vk_api.VkApiError)) throw err2;
-        if (!isEPERM(err2)) throw err2; // Let's just skip this one.
+        if (!isEPERM(err2)) throw err2;
+        config.callback('error', {
+          postId: firstValue.id,
+          error: err2
+        }); // Let's just skip this one.
 
-        console.log(`The following error happened during checking post ID ${firstValue.id}:`);
-        console.log(err2);
         amountsById = {};
         amountsById[firstValue.id] = Infinity;
       }
@@ -21073,7 +21073,7 @@ class VolatileStorage {
     this._storage = null;
 
     try {
-      this._storage = window.localStorage;
+      this._storage = localStorage;
       if (this._storage === undefined) this._storage = null;
     } catch (err) {
       logError(err);
