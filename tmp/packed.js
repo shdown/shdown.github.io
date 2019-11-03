@@ -239,18 +239,20 @@ const findPosts = async config => {
     let amountsById;
 
     try {
-      amountsById = executeBatch(config, hotArray);
+      amountsById = await executeBatch(config, hotArray);
     } catch (err) {
       if (!(err instanceof _vk_api.VkApiError)) throw err;
       if (!isEPERM(err)) throw err;
       const firstValue = hotArray[0];
 
       try {
-        amountsById = executeBatch(config, [firstValue]);
+        amountsById = await executeBatch(config, [firstValue]);
       } catch (err2) {
         if (!(err2 instanceof _vk_api.VkApiError)) throw err2;
         if (!isEPERM(err2)) throw err2; // Let's just skip this one.
 
+        console.log(`The following error happened during checking post ID ${firstValue.id}:`);
+        console.log(err2);
         amountsById = {};
         amountsById[firstValue.id] = Infinity;
       }
