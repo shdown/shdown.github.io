@@ -4,7 +4,7 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.gatherStats = exports.findPosts = void 0;
+exports.gatherStats = exports.findPosts = exports.isEPERM = void 0;
 
 var _vk_api = require("./vk_api.js");
 
@@ -187,6 +187,48 @@ const scheduleBatch = hotArray => {
   return result;
 };
 
+const executeBatch = async (config, hotArray) => {
+  const batch = scheduleBatch(hotArray);
+  let code = `var i = 0, r = [];`;
+  code += `var d = [${batch.map(datum => datum.id).join(',')}];`;
+  code += `var o = [${batch.map(datum => datum.offset).join(',')}];`;
+  code += `while (i < ${batch.length}) {`;
+  code += ` r.push(API.wall.getComments({`;
+  code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
+  code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
+  code += ` }).profiles@.id);`;
+  code += ` i = i + 1;`;
+  code += `}`;
+  code += `return r;`;
+  const executeResult = await config.session.apiExecute({
+    code: code,
+    v: '5.101'
+  });
+  const amountsById = {};
+
+  for (let i = 0; i < batch.length; ++i) {
+    const datum = batch[i];
+    const posterIds = executeResult[i];
+    const oldAmount = amountsById[datum.id] || 0;
+
+    if (posterIds.indexOf(config.uid) !== -1) {
+      config.callback('found', {
+        postId: datum.id,
+        offset: datum.offset
+      });
+      amountsById[datum.id] = Infinity;
+    } else {
+      amountsById[datum.id] = oldAmount + MAX_COMMENTS;
+    }
+  }
+
+  return amountsById;
+};
+
+const isEPERM = err => err.code === 7;
+
+exports.isEPERM = isEPERM;
+
 const findPosts = async config => {
   const reader = new Reader(config);
   const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
@@ -194,51 +236,23 @@ const findPosts = async config => {
   while (true) {
     const hotArray = await hotGroup.getCurrent();
     if (hotArray.length === 0) break;
-    const batch = scheduleBatch(hotArray);
-    let code = `var i = 0, r = [];`;
-    code += `var d = [${batch.map(datum => datum.id).join(',')}];`;
-    code += `var o = [${batch.map(datum => datum.offset).join(',')}];`;
-    code += `while (i < ${batch.length}) {`;
-    code += ` r.push(API.wall.getComments({`;
-    code += `  owner_id: ${config.oid}, post_id: d[i], count: ${MAX_COMMENTS},`;
-    code += `  offset: o[i], need_likes: 0, extended: 1, thread_items_count: 10`;
-    code += ` }).profiles@.id);`;
-    code += ` i = i + 1;`;
-    code += `}`;
-    code += `return r;`;
-    let result;
+    let amountsById;
 
     try {
-      result = await config.session.apiRequest('execute', {
-        code: code,
-        v: '5.101'
-      });
+      amountsById = executeBatch(config, hotArray);
     } catch (err) {
       if (!(err instanceof _vk_api.VkApiError)) throw err;
-      await config.rethrowOrIgnore(err); // skip the first post
+      if (!isEPERM(err)) throw err;
+      const firstValue = hotArray[0];
 
-      const datum = batch[0];
-      const amountsById = {};
-      amountsById[datum.id] = Infinity;
-      hotGroup.decreaseCurrent(amountsById);
-      continue;
-    }
+      try {
+        amountsById = executeBatch(config, [firstValue]);
+      } catch (err2) {
+        if (!(err2 instanceof _vk_api.VkApiError)) throw err2;
+        if (!isEPERM(err2)) throw err2; // Let's just skip this one.
 
-    const amountsById = {};
-
-    for (let i = 0; i < batch.length; ++i) {
-      const datum = batch[i];
-      const posterIds = result[i];
-      const oldAmount = amountsById[datum.id] || 0;
-
-      if (posterIds.indexOf(config.uid) !== -1) {
-        config.callback('found', {
-          postId: datum.id,
-          offset: datum.offset
-        });
-        amountsById[datum.id] = Infinity;
-      } else {
-        amountsById[datum.id] = oldAmount + MAX_COMMENTS;
+        amountsById = {};
+        amountsById[firstValue.id] = Infinity;
       }
     }
 
@@ -263,7 +277,7 @@ const gatherStats = async config => {
     code += ` i = i + 1;`;
     code += `}`;
     code += `return r;`;
-    const data = await config.session.apiRequest('execute', {
+    const data = await config.session.apiExecute({
       code: code,
       v: '5.101'
     });
@@ -691,13 +705,10 @@ document.addEventListener('DOMContentLoaded', () => {
       say(`We are being too fast (${reason})!`);
     });
     say('Getting server time...');
-    const [serverTime] = await session.apiRequest('execute', {
-      code: 'return [API.utils.getServerTime()];',
-      v: '5.101'
-    });
+    const serverTime = await session.apiRequest('utils.getServerTime', {});
     const timeLimit = timeLimitDays * 24 * 60 * 60;
-    const sinceTimestamp = serverTime - timeLimit; // TODO check for duplicates in 'gids'
-
+    const sinceTimestamp = serverTime - timeLimit;
+    gids = (0, _utils.unduplicate)(gids);
     const oidsToStats = await resolveStatsFor(gids, sinceTimestamp);
     let implicitNumerator = 0;
     let implicitDenominator = 0;
@@ -744,10 +755,6 @@ document.addEventListener('DOMContentLoaded', () => {
         oid: oid,
         uid: uid,
         sinceTimestamp: sinceTimestamp,
-        rethrowOrIgnore: async err => {
-          // TODO
-          throw err;
-        },
         ignorePinned: false,
         callback: makeCallbackDispatcher(callbacks)
       });
@@ -815,8 +822,9 @@ document.addEventListener('DOMContentLoaded', () => {
   subsBtn.onclick = () => {
     const uid = parseInt(uid_input.value);
     getSubs(uid).then(gids => gid_input.value = gids.join(',')).catch(err => {
-      alert('Error!'); // TODO
-
+      say('Error...');
+      setMode('text');
+      textElement.innerHTML = (0, _utils.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
       console.log(err);
     });
     return false;
@@ -833,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
       say('Done...');
       setMode('text');
       const seconds = ((0, _utils.monotonicNowMillis)() - startTime) / 1000;
-      textElement.append(`<br/>Done, took ${Math.round(seconds)} s.`);
+      textElement.append(`Done, took ${Math.round(seconds)} s.`);
     }).catch(err => {
       // TODO check if it's cancellation
       say('Error...');
@@ -20703,30 +20711,39 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.StatsStorage = void 0;
 
+var _volatile_storage = require("./volatile_storage.js");
+
 class StatsStorage {
   constructor() {
-    this._data = {};
+    this._vs = new _volatile_storage.VolatileStorage();
   }
 
   getStats(ownerId) {
-    return this._data[ownerId];
+    const raw = this._vs.getValue(`s${ownerId}`);
+
+    if (raw === undefined) return undefined;
+    const [totalComments, timeSpan] = raw.split('/');
+    return {
+      totalComments: parseFloat(totalComments),
+      timeSpan: parseFloat(timeSpan)
+    };
   }
 
   setStats(ownerId, stats) {
-    this._data[ownerId] = stats;
+    this._vs.setValue(`s${ownerId}`, `${stats.totalComments}/${stats.timeSpan}`);
   }
 
 }
 
 exports.StatsStorage = StatsStorage;
 
-},{}],12:[function(require,module,exports){
+},{"./volatile_storage.js":15}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.htmlEscape = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.htmlEscape = exports.unduplicate = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -20745,6 +20762,10 @@ const clearArray = array => {
 };
 
 exports.clearArray = clearArray;
+
+const unduplicate = array => [...new Set(array)];
+
+exports.unduplicate = unduplicate;
 const htmlEntityMap = {
   '&': '&amp;',
   '<': '&lt;',
@@ -20775,11 +20796,12 @@ var _vk_request = require("./vk_request.js");
 var _utils = require("./utils.js");
 
 class VkApiError extends Error {
-  constructor(code, msg) {
+  constructor(code, msg, next = null) {
     super(`[${code}] ${msg}`);
     this.name = 'VkApiError';
     this.code = code;
     this.msg = msg;
+    this.next = next;
   }
 
 }
@@ -20846,7 +20868,7 @@ class VkApiSession {
     await this._sleepMillis(delayMillis);
   }
 
-  async _apiRequestNoRateLimit(method, params) {
+  async _apiRequestNoRateLimit(method, params, raw) {
     if (this._accessToken === null) throw 'Access token was not set for this VkApiSession instance';
     const now = (0, _utils.monotonicNowMillis)();
     const delay = now - this._lastRequestTimestamp;
@@ -20877,13 +20899,13 @@ class VkApiSession {
     }
 
     if (result.error) throw new VkApiError(result.error.error_code, result.error.error_msg);
-    return result.response;
+    return raw ? result : result.response;
   }
 
-  async apiRequest(method, params) {
+  async apiRequest(method, params, raw = false) {
     while (true) {
       try {
-        return await this._apiRequestNoRateLimit(method, params);
+        return await this._apiRequestNoRateLimit(method, params, raw);
       } catch (err) {
         if (!(err instanceof VkApiError)) throw err; // https://vk.com/dev/errors
 
@@ -20907,6 +20929,27 @@ class VkApiSession {
         }
       }
     }
+  }
+
+  async apiExecute(params) {
+    const result = await this.apiRequest('execute', params,
+    /*raw*/
+    true);
+    const errors = result.execute_errors;
+
+    if (errors !== undefined && errors.length !== 0) {
+      let e = null;
+
+      for (const datum of errors) {
+        e = new VkApiError(datum.error_code, datum.error_msg,
+        /*next*/
+        e);
+      }
+
+      throw e;
+    }
+
+    return result.response;
   }
 
 }
@@ -20995,4 +21038,84 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":6}]},{},[5]);
+},{"@vkontakte/vk-connect":6}],15:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.VolatileStorage = void 0;
+
+const logError = err => {
+  console.log('The following localStorage error happened:');
+  console.log(err);
+};
+
+const removeRandomItemFrom = storage => {
+  try {
+    const n = storage.length;
+    if (n === 0) return false;
+    const i = Math.floor(Math.random() * n);
+    storage.removeItem(storage.key(i));
+    return true;
+  } catch (err) {
+    logError(err);
+    return false;
+  }
+};
+
+class VolatileStorage {
+  constructor() {
+    this._storage = null;
+
+    try {
+      this._storage = window.localStorage;
+      if (this._storage === undefined) this._storage = null;
+    } catch (err) {
+      logError(err);
+    }
+
+    this._memory = {};
+  }
+
+  getValue(key) {
+    if (this._storage !== null) {
+      try {
+        const result = this._storage.getItem(key);
+
+        return result === null ? undefined : result;
+      } catch (err) {
+        logError(err);
+        this._storage = null;
+      }
+    }
+
+    return this._memory[key];
+  }
+
+  setValue(key, value) {
+    while (true) {
+      if (this._storage === null) {
+        this._memory[key] = value;
+        return;
+      }
+
+      try {
+        this._storage.setItem(key, value);
+
+        return;
+      } catch (err) {
+        // we assume this is quota error...
+        if (!removeRandomItemFrom(this._storage)) {
+          logError(err);
+          this._storage = null;
+        }
+      }
+    }
+  }
+
+}
+
+exports.VolatileStorage = VolatileStorage;
+
+},{}]},{},[5]);
