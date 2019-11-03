@@ -705,7 +705,9 @@ document.addEventListener('DOMContentLoaded', () => {
       say(`We are being too fast (${reason})!`);
     });
     say('Getting server time...');
-    const serverTime = await session.apiRequest('utils.getServerTime', {});
+    const serverTime = await session.apiRequest('utils.getServerTime', {
+      v: '5.101'
+    });
     const timeLimit = timeLimitDays * 24 * 60 * 60;
     const sinceTimestamp = serverTime - timeLimit;
     gids = (0, _utils.unduplicate)(gids);
@@ -20890,7 +20892,7 @@ class VkApiSession {
     } catch (err) {
       if (!(err instanceof _vk_request.VkRequestError)) throw err;
 
-      if (err.data.error_type === 'client_error') {
+      if (err.data.error_type === 'client_error' && err.data.error_code === 1) {
         const reason = err.data.error_data.error_reason;
         throw new VkApiError(reason.error_code, reason.error_msg);
       } else {
