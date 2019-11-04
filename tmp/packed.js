@@ -568,7 +568,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.GLOBAL_CONFIG = void 0;
 const GLOBAL_CONFIG = {
-  APP_ID: 7184377
+  APP_ID: 7194929
 };
 exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 
