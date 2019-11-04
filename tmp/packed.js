@@ -293,7 +293,6 @@ const gatherStats = async config => {
 
       for (const post of ownerDatum.items) {
         const isPinned = post.is_pinned;
-        if (post.date < config.sinceTimestamp && !isPinned) break;
         if (isPinned && config.ignorePinned) continue;
         totalComments += post.comments.count;
 
@@ -517,11 +516,11 @@ class ChartPainter {
     this._update(i, value, true);
   }
 
-  _repaint() {
+  _repaint(duration = UPDATE_DURATION_MILLIS) {
     this._lastRepaintTimestamp = (0, _utils.monotonicNowMillis)();
 
     this._chart.update({
-      duration: UPDATE_DURATION_MILLIS
+      duration: duration
     });
   }
 
@@ -554,7 +553,7 @@ class ChartPainter {
     (0, _utils.clearArray)(this._chart.data.datasets[1].backgroundColor);
     (0, _utils.clearArray)(this._fgIndices);
 
-    this._repaint();
+    this._repaint(20);
   }
 
 }
@@ -576,7 +575,7 @@ exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 },{}],5:[function(require,module,exports){
 "use strict";
 
-var _vk_request = require("./vk_request.js");
+var _vk_connect = require("./vk_connect.js");
 
 var _vk_api = require("./vk_api.js");
 
@@ -604,59 +603,16 @@ const makeCallbackDispatcher = callbacks => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  new _vk_request.VkRequest('VKWebAppInit', {}).schedule();
+  new _vk_connect.VkRequest('VKWebAppInit', {}).schedule();
   const body = document.getElementsByTagName('body')[0];
+  let accessToken = '';
+  const session = new _vk_api.VkApiSession((method, params) => (0, _vk_connect.vkSendApiRequest)(method, { ...params,
+    access_token: accessToken
+  }));
   const statsStorage = new _stats_storage.StatsStorage();
-  const progressPainter = new _progress_painter.ProgressPainter();
-  progressPainter.element.style = 'display: block; width: 100%;';
-  const chartPainter = new _chart_painter.ChartPainter();
-  const textElement = document.createElement('div');
-  const session = new _vk_api.VkApiSession();
-
-  const setMode = mode => {
-    progressPainter.reset();
-    chartPainter.reset();
-    const chartElement = chartPainter.element;
-
-    switch (mode) {
-      case 'chart':
-        chartElement.style.display = 'block';
-        textElement.style.display = 'none';
-        break;
-
-      case 'text':
-        chartElement.style.display = 'none';
-        textElement.style.display = 'block';
-        break;
-
-      default:
-        throw `unknown mode "${mode}"`;
-    }
-  };
-
-  setMode('chart'); //const logArea = document.createElement('div');
-  //const resetLogArea = () => {
-  //    logArea.innerHTML = '<hr/><b>Log area:</b>';
-  //    const clearBtn = document.createElement('input');
-  //    clearBtn.setAttribute('type', 'button');
-  //    clearBtn.setAttribute('value', 'Clear');
-  //    clearBtn.onclick = () => {
-  //        resetLogArea();
-  //        return false;
-  //    };
-  //    logArea.appendChild(clearBtn);
-  //};
-  //resetLogArea();
-
-  const say = what => {
-    console.log(what); //const line = document.createElement('div');
-    //line.innerHTML = htmlEscape(what);
-    //logArea.appendChild(line);
-  };
 
   const getAccessToken = async scope => {
-    say('Requesting access token...');
-    const result = await (0, _vk_request.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
+    const result = await (0, _vk_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
       app_id: _global_config.GLOBAL_CONFIG.APP_ID,
       scope: scope
     });
@@ -666,10 +622,109 @@ document.addEventListener('DOMContentLoaded', () => {
     const isSubset = (a, b) => new Set([...a, ...b]).size === new Set(b).size;
 
     if (!isSubset(splitPermissions(scope), splitPermissions(result.scope))) throw new Error(`Requested scope "${scope}", got "${result.scope}"`);
-    return result.access_token;
+    accessToken = result.access_token;
   };
 
-  const resolveStatsFor = async (oids, sinceTimestamp) => {
+  const resolveDomainToId = async domain => {
+    if (domain.match(/^-?\d+$/) !== null) return parseInt(domain);
+    const resp = await session.apiRequest('utils.resolveScreenName', {
+      screen_name: domain,
+      v: '5.103'
+    });
+
+    switch (resp.type) {
+      case 'group':
+      case 'public':
+      case 'club':
+        return -resp.object_id;
+
+      case 'user':
+        return resp.object_id;
+
+      default:
+        throw new Error(`Unknown object type "${resp.type}"`);
+    }
+  };
+
+  const resultDiv = document.createElement('div');
+  const workingDiv = document.createElement('div');
+  const workingText = document.createElement('div');
+  workingText.innerHTML = '…';
+  const progressPainter = new _progress_painter.ProgressPainter();
+  progressPainter.element.style = 'display: block; width: 100%;';
+  const chartPainter = new _chart_painter.ChartPainter();
+  workingDiv.appendChild(progressPainter.element);
+  workingDiv.appendChild(chartPainter.element);
+  workingDiv.appendChild(workingText);
+  const form = document.createElement('form');
+  const formLog = document.createElement('div');
+
+  const appendInputToForm = props => {
+    const elem = document.createElement(props.tag || 'input');
+    if (props.type !== undefined) elem.setAttribute('type', props.type);
+    if (props.required) elem.setAttribute('required', '1');
+    if (props.value !== undefined) elem.setAttribute('value', props.value);
+
+    if (props.label !== undefined) {
+      const text = document.createElement('div');
+      text.innerHTML = props.label;
+      form.appendChild(text);
+    }
+
+    form.appendChild(elem);
+    return elem;
+  };
+
+  const userIdInput = appendInputToForm({
+    type: 'text',
+    label: 'ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):',
+    required: true
+  });
+  form.appendChild(document.createElement('hr'));
+  const ownerIdsInput = appendInputToForm({
+    tag: 'textarea',
+    label: 'Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки:',
+    required: true
+  });
+
+  const fillSubscriptions = async userDomain => {
+    await getAccessToken('');
+    const uid = await resolveDomainToId(userDomain);
+    const resp = await session.apiRequest('users.getSubscriptions', {
+      user_id: uid,
+      v: '5.103'
+    });
+    const result = [];
+
+    for (const id of resp.users.items) result.push(id);
+
+    for (const id of resp.groups.items) result.push(-id);
+
+    ownerIdsInput.value = result.join('\n');
+  };
+
+  form.appendChild(document.createElement('br'));
+  const getSubsBtn = appendInputToForm({
+    type: 'button',
+    value: 'Заполнить подписками пользователя'
+  });
+
+  getSubsBtn.onclick = () => {
+    fillSubscriptions(userIdInput.value).catch(err => {
+      formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
+    });
+    return false;
+  };
+
+  form.appendChild(document.createElement('hr'));
+  const timeLimitInput = appendInputToForm({
+    type: 'number',
+    label: 'Ограничение по времени, в днях:',
+    value: '30',
+    required: true
+  });
+
+  const resolveStatsFor = async oids => {
     const result = {};
     const oidsToGatherStats = [];
 
@@ -682,7 +737,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const gatherResults = await (0, _algo.gatherStats)({
       oids: oidsToGatherStats,
       session: session,
-      sinceTimestamp: sinceTimestamp,
       ignorePinned: false,
       callback: makeCallbackDispatcher({
         progress: datum => {
@@ -701,38 +755,52 @@ document.addEventListener('DOMContentLoaded', () => {
     return result;
   };
 
-  const work = async (uid, gids, timeLimitDays) => {
-    session.setAccessToken((await getAccessToken('')));
+  const work = async () => {
+    workingText.innerHTML = 'Получаю токен…';
+    await getAccessToken('');
     session.setRateLimitCallback(reason => {
-      say(`We are being too fast (${reason})!`);
+      workingText.innerHTML = `Умерим пыл (${(0, _utils.htmlEscape)(reason)})`;
     });
-    say('Getting server time...');
+    workingText.innerHTML = 'Получаю время сервера…';
     const serverTime = await session.apiRequest('utils.getServerTime', {
       v: '5.101'
     });
-    const timeLimit = timeLimitDays * 24 * 60 * 60;
+    const timeLimit = parseFloat(timeLimitInput.value) * 24 * 60 * 60;
     const sinceTimestamp = serverTime - timeLimit;
-    gids = (0, _utils.unduplicate)(gids);
-    const oidsToStats = await resolveStatsFor(gids, sinceTimestamp);
+    workingText.innerHTML = 'Проверяю пользователя…';
+    const uid = await resolveDomainToId(userIdInput.value);
+    workingText.innerHTML = 'Проверяю список пабликов…';
+    let oids = [];
+
+    for (const domain of ownerIdsInput.value.split(/[,\s]/)) if (domain !== '') oids.push((await resolveDomainToId(domain)));
+
+    oids = (0, _utils.unduplicate)(oids);
+    workingText.innerHTML = 'Собираю статистику…';
+    const stats = await resolveStatsFor(oids);
     let implicitNumerator = 0;
     let implicitDenominator = 0;
 
-    for (const oid in oidsToStats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid], timeLimit);
+    for (const oid in stats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats[oid], timeLimit);
 
-    for (const oid of gids) {
-      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(oidsToStats[oid], timeLimit);
-      const estimator = new _progress_estimator.ProgressEstimator(timeLimit);
+    const result = [];
+
+    for (let i = 0; i < oids.length; ++i) {
+      const oid = oids[i];
+      let html = `Ищу в ${i + 1}/${oids.length}`;
+      if (result.length !== 0) html += ` (найдено ${result.length})`;
+      workingText.innerHTML = html;
+      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats[oid], timeLimit);
+      const estimator = new _progress_estimator.ProgressEstimator();
       chartPainter.reset();
       const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
       const callbacks = {
         found: datum => {
           const link = `https://vk.com/wall${oid}_${datum.postId}`;
-          console.log(`FOUND: ${link}`);
-          const a = document.createElement('a');
-          a.style.display = 'block';
-          a.setAttribute('href', link);
-          a.innerHTML = (0, _utils.htmlEscape)(link);
-          textElement.appendChild(a);
+          result.push({
+            link: link,
+            offset: datum.offset
+          });
+          workingText.innerHTML = `Найдено: <a href="${link}">${(0, _utils.htmlEscape)(link)}</a>`;
         },
         infoAdd: datum => {
           chartCtl.handleAdd(datum);
@@ -751,9 +819,15 @@ document.addEventListener('DOMContentLoaded', () => {
           const numerator = explicitNumerator + implicitNumerator;
           const denominator = explicitDenominator + implicitDenominator;
           progressPainter.setRatio(numerator / denominator);
+        },
+        error: datum => {
+          let html = `Ошибка при проверке ${oid}_${datum.postId}: `;
+          html += `${(0, _utils.htmlEscape)(datum.error.name)}: ${(0, _utils.htmlEscape)(datum.error.message)}`;
+          workingText.innerHTML = html;
+          console.log('error callback payload:');
+          console.log(datum.error);
         }
       };
-      say('Transferring control to findPosts()...');
       await (0, _algo.findPosts)({
         session: session,
         oid: oid,
@@ -767,114 +841,289 @@ document.addEventListener('DOMContentLoaded', () => {
       implicitDenominator += commentsChecked;
       statsStorage.setStats(oid, estimator.getStats());
     }
-  };
-
-  const getSubs = async uid => {
-    session.setAccessToken((await getAccessToken('')));
-    session.setRateLimitCallback(reason => {
-      say(`We are being too fast (${reason})!`);
-    });
-    const resp = await session.apiRequest('users.getSubscriptions', {
-      user_id: uid,
-      v: '5.103'
-    });
-    const result = [];
-
-    for (const id of resp.users.items) result.push(id);
-
-    for (const id of resp.groups.items) result.push(-id);
 
     return result;
   };
 
-  const form = document.createElement('form');
-  const uid_div = document.createElement('span');
-  uid_div.innerHTML = 'User ID: ';
-  const uid_input = document.createElement('input');
-  uid_input.style.width = '15%';
-  uid_input.setAttribute('type', 'number');
-  uid_input.setAttribute('required', '1');
-  const gid_div = document.createElement('span');
-  gid_div.innerHTML = 'Group ID(s): ';
-  const gid_input = document.createElement('input');
-  gid_input.style.width = '15%';
-  gid_input.setAttribute('type', 'text');
-  gid_input.setAttribute('required', '1');
-  const tl_div = document.createElement('span');
-  tl_div.innerHTML = 'Time limit (days): ';
-  const tl_input = document.createElement('input');
-  tl_input.setAttribute('type', 'number');
-  tl_input.style.width = '10%';
-  tl_input.setAttribute('value', '7');
-  tl_input.setAttribute('required', '1');
-  const btn_div = document.createElement('span');
-  const submitBtn = document.createElement('input');
-  submitBtn.setAttribute('type', 'submit');
-  const cancelBtn = document.createElement('input');
-  cancelBtn.setAttribute('type', 'button');
-  cancelBtn.setAttribute('value', 'Cancel');
-
-  cancelBtn.onclick = () => {
-    session.cancel();
-    return false;
-  };
-
-  const subsBtn = document.createElement('input');
-  subsBtn.setAttribute('type', 'button');
-  subsBtn.setAttribute('value', 'Get subs');
-
-  subsBtn.onclick = () => {
-    const uid = parseInt(uid_input.value);
-    getSubs(uid).then(gids => gid_input.value = gids.join(',')).catch(err => {
-      say('Error...');
-      setMode('text');
-      textElement.innerHTML = (0, _utils.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
-      console.log(err);
-    });
-    return false;
-  };
+  form.appendChild(document.createElement('hr'));
+  appendInputToForm({
+    type: 'submit'
+  });
+  form.appendChild(document.createElement('hr'));
+  form.appendChild(formLog);
 
   form.onsubmit = () => {
-    const uid = parseInt(uid_input.value);
-    const gids = gid_input.value.split(',').map(s => parseInt(s));
-    const tl = parseFloat(tl_input.value);
-    setMode('chart');
-    textElement.innerHTML = '';
-    const startTime = (0, _utils.monotonicNowMillis)();
-    work(uid, gids, tl).then(() => {
-      say('Done...');
-      setMode('text');
-      const seconds = ((0, _utils.monotonicNowMillis)() - startTime) / 1000;
-      textElement.append(`Done, took ${Math.round(seconds)} s.`);
+    form.remove();
+    body.appendChild(workingDiv);
+    work().then(result => {
+      console.log('Done');
+      workingDiv.remove();
+      body.appendChild(resultDiv);
+
+      if (result.length === 0) {
+        resultDiv.innerHTML = 'Ничего не найдено! 😢';
+      } else {
+        resultDiv.innerHTML = 'Найдены посты:<br/>';
+        const ul = document.createElement('ul');
+
+        for (const datum of result) {
+          const a = document.createElement('a');
+          a.setAttribute('href', datum.link);
+          a.innerHTML = (0, _utils.htmlEscape)(datum.link);
+          const li = document.createElement('li');
+          li.appendChild(a);
+          ul.appendChild(li);
+        }
+
+        resultDiv.appendChild(ul);
+      }
     }).catch(err => {
-      // TODO check if it's cancellation
-      say('Error...');
-      setMode('text');
-      textElement.innerHTML = (0, _utils.htmlEscape)(`ERROR: ${err.name}: ${err.message}`);
       console.log(err);
-    }); // Do not reload the page!
-
+      workingDiv.remove();
+      body.appendChild(resultDiv);
+      resultDiv.innerHTML = `Произошла ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
+    });
     return false;
-  };
+  }; //-------------------------------------------------------------------------------------
 
-  uid_div.appendChild(uid_input);
-  gid_div.appendChild(gid_input);
-  tl_div.appendChild(tl_input);
-  btn_div.appendChild(submitBtn);
-  btn_div.appendChild(cancelBtn);
-  form.appendChild(uid_div);
-  form.appendChild(gid_div);
-  form.appendChild(tl_div);
-  form.appendChild(btn_div);
-  form.appendChild(subsBtn);
-  body.appendChild(form);
-  body.appendChild(progressPainter.element);
-  body.appendChild(chartPainter.element);
-  body.appendChild(textElement);
-  say('Initialized');
+
+  body.appendChild(form); //    const textElement = document.createElement('div');
+  //
+  //    const setMode = (mode) => {
+  //        progressPainter.reset();
+  //        chartPainter.reset();
+  //        const chartElement = chartPainter.element;
+  //        switch (mode) {
+  //        case 'chart':
+  //            chartElement.style.display = 'block';
+  //            textElement.style.display = 'none';
+  //            break;
+  //        case 'text':
+  //            chartElement.style.display = 'none';
+  //            textElement.style.display = 'block';
+  //            break;
+  //        default:
+  //            throw `unknown mode "${mode}"`;
+  //        }
+  //    };
+  //    setMode('chart');
+  //
+  //    //const logArea = document.createElement('div');
+  //    //const resetLogArea = () => {
+  //    //    logArea.innerHTML = '<hr/><b>Log area:</b>';
+  //    //    const clearBtn = document.createElement('input');
+  //    //    clearBtn.setAttribute('type', 'button');
+  //    //    clearBtn.setAttribute('value', 'Clear');
+  //    //    clearBtn.onclick = () => {
+  //    //        resetLogArea();
+  //    //        return false;
+  //    //    };
+  //    //    logArea.appendChild(clearBtn);
+  //    //};
+  //    //resetLogArea();
+  //
+  //    const say = what => {
+  //        console.log(what);
+  //        //const line = document.createElement('div');
+  //        //line.innerHTML = htmlEscape(what);
+  //        //logArea.appendChild(line);
+  //    };
+  //
+  //    const work = async (uid, gids, timeLimitDays) => {
+  //        accessToken = await getAccessToken('');
+  //        session.setRateLimitCallback(reason => {
+  //            say(`We are being too fast (${reason})!`);
+  //        });
+  //        say('Getting server time...');
+  //        const serverTime = await session.apiRequest('utils.getServerTime', {v: '5.101'});
+  //        const timeLimit = timeLimitDays * 24 * 60 * 60;
+  //        const sinceTimestamp = serverTime - timeLimit;
+  //        gids = unduplicate(gids);
+  //        const oidsToStats = await resolveStatsFor(gids);
+  //
+  //        let implicitNumerator = 0;
+  //
+  //        let implicitDenominator = 0;
+  //        for (const oid in oidsToStats)
+  //            implicitDenominator += ProgressEstimator.statsToExpectedCommentsCount(
+  //                oidsToStats[oid], timeLimit);
+  //
+  //        for (const oid of gids) {
+  //            implicitDenominator -= ProgressEstimator.statsToExpectedCommentsCount(
+  //                oidsToStats[oid], timeLimit);
+  //
+  //            const estimator = new ProgressEstimator();
+  //            chartPainter.reset();
+  //            const chartCtl = new ChartController(30, chartPainter);
+  //
+  //            const callbacks = {
+  //                found: datum => {
+  //                    const link = `https://vk.com/wall${oid}_${datum.postId}`;
+  //                    console.log(`FOUND: ${link}`);
+  //                    const a = document.createElement('a');
+  //                    a.style.display = 'block';
+  //                    a.setAttribute('href', link);
+  //                    a.innerHTML = htmlEscape(link);
+  //                    textElement.appendChild(a);
+  //                },
+  //                infoAdd: datum => {
+  //                    chartCtl.handleAdd(datum);
+  //                    estimator.handleAdd(datum);
+  //                },
+  //                infoUpdate: datum => {
+  //                    chartCtl.handleUpdate(datum);
+  //                    estimator.handleUpdate(datum);
+  //                },
+  //                infoFlush: _ => {
+  //                    chartCtl.handleFlush();
+  //
+  //                    const explicitNumerator = estimator.getDoneCommentsNumber();
+  //                    const explicitDenominator = ProgressEstimator.statsToExpectedCommentsCount(
+  //                        estimator.getStats(), timeLimit);
+  //                    const numerator = explicitNumerator + implicitNumerator;
+  //                    const denominator = explicitDenominator + implicitDenominator;
+  //                    progressPainter.setRatio(numerator / denominator);
+  //                },
+  //            };
+  //            say('Transferring control to findPosts()...');
+  //            await findPosts({
+  //                session: session,
+  //                oid: oid,
+  //                uid: uid,
+  //                sinceTimestamp: sinceTimestamp,
+  //                ignorePinned: false,
+  //                callback: makeCallbackDispatcher(callbacks),
+  //            });
+  //
+  //            const commentsChecked = estimator.getDoneCommentsNumber();
+  //            implicitNumerator += commentsChecked;
+  //            implicitDenominator += commentsChecked;
+  //            statsStorage.setStats(oid, estimator.getStats());
+  //        }
+  //    };
+  //
+  //    const getSubs = async (uid) => {
+  //        accessToken = await getAccessToken('');
+  //        session.setRateLimitCallback(reason => {
+  //            say(`We are being too fast (${reason})!`);
+  //        });
+  //        const resp = await session.apiRequest('users.getSubscriptions', {
+  //            user_id: uid,
+  //            v: '5.103',
+  //        });
+  //        const result = [];
+  //        for (const id of resp.users.items)
+  //            result.push(id);
+  //        for (const id of resp.groups.items)
+  //            result.push(-id);
+  //        return result;
+  //    };
+  //
+  //    const form = document.createElement('form');
+  //
+  //    const uid_div = document.createElement('span');
+  //    uid_div.innerHTML = 'User ID: ';
+  //
+  //    const uid_input = document.createElement('input');
+  //    uid_input.style.width = '15%';
+  //    uid_input.setAttribute('type', 'number');
+  //    uid_input.setAttribute('required', '1');
+  //
+  //    const gid_div = document.createElement('span');
+  //    gid_div.innerHTML = 'Group ID(s): ';
+  //
+  //    const gid_input = document.createElement('input');
+  //    gid_input.style.width = '15%';
+  //    gid_input.setAttribute('type', 'text');
+  //    gid_input.setAttribute('required', '1');
+  //
+  //    const tl_div = document.createElement('span');
+  //    tl_div.innerHTML = 'Time limit (days): ';
+  //
+  //    const tl_input = document.createElement('input');
+  //    tl_input.setAttribute('type', 'number');
+  //    tl_input.style.width = '10%';
+  //    tl_input.setAttribute('value', '7');
+  //    tl_input.setAttribute('required', '1');
+  //
+  //    const btn_div = document.createElement('span');
+  //
+  //    const submitBtn = document.createElement('input');
+  //    submitBtn.setAttribute('type', 'submit');
+  //
+  //    const cancelBtn = document.createElement('input');
+  //    cancelBtn.setAttribute('type', 'button');
+  //    cancelBtn.setAttribute('value', 'Cancel');
+  //    cancelBtn.onclick = () => {
+  //        session.cancel();
+  //        return false;
+  //    };
+  //
+  //    const subsBtn = document.createElement('input');
+  //    subsBtn.setAttribute('type', 'button');
+  //    subsBtn.setAttribute('value', 'Get subs');
+  //    subsBtn.onclick = () => {
+  //        const uid = parseInt(uid_input.value);
+  //        getSubs(uid)
+  //            .then(gids => gid_input.value = gids.join(','))
+  //            .catch(err => {
+  //                say('Error...');
+  //                setMode('text');
+  //                textElement.innerHTML = htmlEscape(`ERROR: ${err.name}: ${err.message}`);
+  //                console.log(err);
+  //            });
+  //        return false;
+  //    };
+  //
+  //    form.onsubmit = () => {
+  //        const uid = parseInt(uid_input.value);
+  //        const gids = gid_input.value.split(',').map(s => parseInt(s));
+  //        const tl = parseFloat(tl_input.value);
+  //
+  //        setMode('chart');
+  //        textElement.innerHTML = '';
+  //
+  //        const startTime = monotonicNowMillis();
+  //        work(uid, gids, tl)
+  //            .then(() => {
+  //                say('Done...');
+  //                setMode('text');
+  //                const seconds = (monotonicNowMillis() - startTime) / 1000;
+  //                textElement.append(`Done, took ${Math.round(seconds)} s.`);
+  //            })
+  //            .catch(err => {
+  //                // TODO check if it's cancellation
+  //                say('Error...');
+  //                setMode('text');
+  //                textElement.innerHTML = htmlEscape(`ERROR: ${err.name}: ${err.message}`);
+  //                console.log(err);
+  //            });
+  //
+  //        // Do not reload the page!
+  //        return false;
+  //    };
+  //
+  //    uid_div.appendChild(uid_input);
+  //    gid_div.appendChild(gid_input);
+  //    tl_div.appendChild(tl_input);
+  //    btn_div.appendChild(submitBtn);
+  //    btn_div.appendChild(cancelBtn);
+  //
+  //    form.appendChild(uid_div);
+  //    form.appendChild(gid_div);
+  //    form.appendChild(tl_div);
+  //    form.appendChild(btn_div);
+  //    form.appendChild(subsBtn);
+  //
+  //    body.appendChild(form);
+  //    body.appendChild(progressPainter.element);
+  //    body.appendChild(chartPainter.element);
+  //    body.appendChild(textElement);
+  //
+  //    say('Initialized');
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_request.js":14}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_connect.js":14}],6:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -20626,13 +20875,12 @@ Object.defineProperty(exports, "__esModule", {
 exports.ProgressEstimator = void 0;
 
 class ProgressEstimator {
-  constructor(timeLimit) {
+  constructor() {
     this._offsets = {};
     this._totalDone = 0;
     this._totalTodo = 0;
     this._earliestTimestamp = Infinity;
     this._latestTimestamp = -Infinity;
-    this._timeLimit = timeLimit;
   }
 
   handleAdd(value) {
@@ -20715,44 +20963,20 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.StatsStorage = void 0;
 
-var _volatile_storage = require("./volatile_storage.js");
-
 class StatsStorage {
-  constructor() {
-    this._vs = new _volatile_storage.VolatileStorage();
-    const request = indexedDB.open('MyTestDatabase');
-
-    request.onerror = evt => {
-      console.log('Why did not you allow my web app to use IndexedDB?!');
-      console.log(evt);
-    };
-
-    request.onsuccess = evt => {
-      console.log('Success!');
-      console.log(evt);
-    };
-  }
+  constructor() {}
 
   getStats(ownerId) {
-    const raw = this._vs.getValue(`s${ownerId}`);
-
-    if (raw === undefined) return undefined;
-    const [totalComments, timeSpan] = raw.split('/');
-    return {
-      totalComments: parseFloat(totalComments),
-      timeSpan: parseFloat(timeSpan)
-    };
+    return undefined;
   }
 
-  setStats(ownerId, stats) {
-    this._vs.setValue(`s${ownerId}`, `${stats.totalComments}/${stats.timeSpan}`);
-  }
+  setStats(ownerId, stats) {}
 
 }
 
 exports.StatsStorage = StatsStorage;
 
-},{"./volatile_storage.js":15}],12:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20806,8 +21030,6 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.VkApiSession = exports.VkApiCancellation = exports.VkApiError = void 0;
 
-var _vk_request = require("./vk_request.js");
-
 var _utils = require("./utils.js");
 
 class VkApiError extends Error {
@@ -20835,8 +21057,8 @@ exports.VkApiCancellation = VkApiCancellation;
 const MIN_DELAY_MILLIS = 360;
 
 class VkApiSession {
-  constructor() {
-    this._accessToken = null;
+  constructor(sendRequestFunc) {
+    this._sendRequestFunc = sendRequestFunc;
     this._rateLimitCallback = null;
     this._lastRequestTimestamp = -Infinity;
     this._cancelFlag = false;
@@ -20868,11 +21090,6 @@ class VkApiSession {
     this._cancelFlag = true;
   }
 
-  setAccessToken(accessToken) {
-    this._accessToken = accessToken;
-    return this;
-  }
-
   setRateLimitCallback(fn) {
     this._rateLimitCallback = fn;
     return this;
@@ -20884,7 +21101,6 @@ class VkApiSession {
   }
 
   async _apiRequestNoRateLimit(method, params, raw) {
-    if (this._accessToken === null) throw 'Access token was not set for this VkApiSession instance';
     const now = (0, _utils.monotonicNowMillis)();
     const delay = now - this._lastRequestTimestamp;
     if (delay < MIN_DELAY_MILLIS) await this._sleepMillis(MIN_DELAY_MILLIS - delay);
@@ -20892,28 +21108,7 @@ class VkApiSession {
     this._maybeThrowForCancel();
 
     this._lastRequestTimestamp = (0, _utils.monotonicNowMillis)();
-    let result;
-
-    try {
-      result = await (0, _vk_request.vkSendRequest)('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
-        method: method,
-        params: { ...params,
-          access_token: this._accessToken
-        },
-        request_id: '1'
-      });
-    } catch (err) {
-      if (!(err instanceof _vk_request.VkRequestError)) throw err;
-
-      if (err.data.error_type === 'client_error' && err.data.error_code === 1) {
-        const reason = err.data.error_data.error_reason;
-        throw new VkApiError(reason.error_code, reason.error_msg);
-      } else {
-        throw err;
-      }
-    }
-
-    if (result.error) throw new VkApiError(result.error.error_code, result.error.error_msg);
+    const result = await this._sendRequestFunc(method, params);
     return raw ? result : result.response;
   }
 
@@ -20971,15 +21166,17 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":12,"./vk_request.js":14}],14:[function(require,module,exports){
+},{"./utils.js":12}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
+exports.vkSendApiRequest = exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
 
 var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
+
+var _vk_api = require("./vk_api.js");
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -21053,84 +21250,30 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-},{"@vkontakte/vk-connect":6}],15:[function(require,module,exports){
-"use strict";
+const vkSendApiRequest = async (method, params) => {
+  let result;
 
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.VolatileStorage = void 0;
-
-const logError = err => {
-  console.log('The following localStorage error happened:');
-  console.log(err);
-};
-
-const removeRandomItemFrom = storage => {
   try {
-    const n = storage.length;
-    if (n === 0) return false;
-    const i = Math.floor(Math.random() * n);
-    storage.removeItem(storage.key(i));
-    return true;
+    result = await vkSendRequest('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
+      method: method,
+      params: params,
+      request_id: '1'
+    });
   } catch (err) {
-    logError(err);
-    return false;
+    if (!(err instanceof VkRequestError)) throw err;
+
+    if (err.data.error_type === 'client_error' && err.data.error_code === 1) {
+      const reason = err.data.error_data.error_reason;
+      throw new _vk_api.VkApiError(reason.error_code, reason.error_msg);
+    } else {
+      throw err;
+    }
   }
+
+  if (result.error) throw new _vk_api.VkApiError(result.error.error_code, result.error.error_msg);
+  return result;
 };
 
-class VolatileStorage {
-  constructor() {
-    this._storage = null;
+exports.vkSendApiRequest = vkSendApiRequest;
 
-    try {
-      this._storage = window.localStorage;
-      if (this._storage === undefined) this._storage = null;
-    } catch (err) {
-      logError(err);
-    }
-
-    this._memory = {};
-  }
-
-  getValue(key) {
-    if (this._storage !== null) {
-      try {
-        const result = this._storage.getItem(key);
-
-        return result === null ? undefined : result;
-      } catch (err) {
-        logError(err);
-        this._storage = null;
-      }
-    }
-
-    return this._memory[key];
-  }
-
-  setValue(key, value) {
-    while (true) {
-      if (this._storage === null) {
-        this._memory[key] = value;
-        return;
-      }
-
-      try {
-        this._storage.setItem(key, value);
-
-        return;
-      } catch (err) {
-        // we assume this is quota error...
-        if (!removeRandomItemFrom(this._storage)) {
-          logError(err);
-          this._storage = null;
-        }
-      }
-    }
-  }
-
-}
-
-exports.VolatileStorage = VolatileStorage;
-
-},{}]},{},[5]);
+},{"./vk_api.js":13,"@vkontakte/vk-connect":6}]},{},[5]);
