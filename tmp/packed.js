@@ -720,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   getSubsBtn.onclick = () => {
-    fillSubscriptions(userIdInput.value).then(result => {
+    getSubscriptions(userIdInput.value).then(result => {
       ownerIdsInput.value = result.join('\n');
     }).catch(err => {
       formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
