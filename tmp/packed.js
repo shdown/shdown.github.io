@@ -192,8 +192,14 @@ const foolProofExecute = async (config, params) => {
     response,
     errors
   } = await config.session.apiExecuteRaw(params);
-  if (Array.isArray(response) && response.length !== 0) return response;
   if (errors.length === 0) return response;
+
+  if (Array.isArray(response) && response.length !== 0) {
+    for (const error of errors) if (!isEPERM(error)) throw error;
+
+    return response;
+  }
+
   throw errors[0];
 };
 
@@ -699,6 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getSubscriptions = async userDomain => {
     await getAccessToken('');
+    session.setRateLimitCallback(null);
     const uid = await resolveDomainToId(userDomain);
     const resp = await session.apiRequest('users.getSubscriptions', {
       user_id: uid,
