@@ -688,7 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const fillSubscriptions = async userDomain => {
-    await getAccessToken('');
+    await getAccessToken('friends');
     const uid = await resolveDomainToId(userDomain);
     const resp = await session.apiRequest('users.getSubscriptions', {
       user_id: uid,
@@ -757,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const work = async () => {
     workingText.innerHTML = 'Получаю токен…';
-    await getAccessToken('');
+    await getAccessToken('friends');
     session.setRateLimitCallback(reason => {
       workingText.innerHTML = `Умерим пыл (${(0, _utils.htmlEscape)(reason)})`;
     });
