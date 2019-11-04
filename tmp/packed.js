@@ -697,7 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
     required: true
   });
 
-  const fillSubscriptions = async userDomain => {
+  const getSubscriptions = async userDomain => {
     await getAccessToken('');
     const uid = await resolveDomainToId(userDomain);
     const resp = await session.apiRequest('users.getSubscriptions', {
@@ -710,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const id of resp.groups.items) result.push(-id);
 
-    ownerIdsInput.value = result.join('\n');
+    return result;
   };
 
   form.appendChild(document.createElement('br'));
@@ -720,7 +720,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   getSubsBtn.onclick = () => {
-    fillSubscriptions(userIdInput.value).catch(err => {
+    fillSubscriptions(userIdInput.value).then(result => {
+      ownerIdsInput.value = result.join('\n');
+    }).catch(err => {
       formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
     });
     return false;
@@ -810,7 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
             link: link,
             offset: datum.offset
           });
-          workConfig.logHTML(`Найдено: <a href="${link}">${(0, _utils.htmlEscape)(link)}</a>`);
+          workConfig.logText(`Найдено: ${link}`);
         },
         infoAdd: datum => {
           chartCtl.handleAdd(datum);
@@ -866,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const workConfig = {
       userDomain: userIdInput.value,
       publicDomains: ownerIdsInput.value.split(/[,\s]/).filter(domain => domain !== ''),
-      timeLimit: parseFloat(timeLimitInput) * 24 * 60 * 60,
+      timeLimit: parseFloat(timeLimitInput.value) * 24 * 60 * 60,
       ignorePinned: false,
       ignoreWeirdErrors: true,
       logText: text => {
@@ -892,6 +894,8 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const datum of result) {
           const a = document.createElement('a');
           a.setAttribute('href', datum.link);
+          a.setAttribute('rel', 'noopener noreferrer');
+          a.setAttribute('target', '_blank');
           a.innerHTML = (0, _utils.htmlEscape)(datum.link);
           const li = document.createElement('li');
           li.appendChild(a);
