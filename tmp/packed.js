@@ -187,6 +187,16 @@ const scheduleBatch = hotArray => {
   return result;
 };
 
+const foolProofExecute = async (config, params) => {
+  const {
+    response,
+    errors
+  } = await config.session.apiExecuteRaw(params);
+  if (Array.isArray(response) && response.length !== 0) return response;
+  if (errors.length === 0) return response;
+  throw errors[0];
+};
+
 const executeBatch = async (config, hotArray) => {
   const batch = scheduleBatch(hotArray);
   let code = `var i = 0, r = [];`;
@@ -200,7 +210,7 @@ const executeBatch = async (config, hotArray) => {
   code += ` i = i + 1;`;
   code += `}`;
   code += `return r;`;
-  const executeResult = await config.session.apiExecute({
+  const executeResult = await foolProofExecute(config, {
     code: code,
     v: '5.101'
   });
@@ -279,7 +289,7 @@ const gatherStats = async config => {
     code += ` i = i + 1;`;
     code += `}`;
     code += `return r;`;
-    const data = await config.session.apiExecute({
+    const data = await foolProofExecute(config, {
       code: code,
       v: '5.101'
     });
@@ -642,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return resp.object_id;
 
       default:
-        throw new Error(`Unknown object type "${resp.type}"`);
+        throw new Error(`Cannot resolve "${domain}": unknown object type "${resp.type}"`);
     }
   };
 
@@ -688,7 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const fillSubscriptions = async userDomain => {
-    await getAccessToken('friends');
+    await getAccessToken('');
     const uid = await resolveDomainToId(userDomain);
     const resp = await session.apiRequest('users.getSubscriptions', {
       user_id: uid,
@@ -724,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
     required: true
   });
 
-  const resolveStatsFor = async oids => {
+  const resolveStatsFor = async (oids, resolveConfig) => {
     const result = {};
     const oidsToGatherStats = [];
 
@@ -737,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gatherResults = await (0, _algo.gatherStats)({
       oids: oidsToGatherStats,
       session: session,
-      ignorePinned: false,
+      ignorePinned: resolveConfig.ignorePinned,
       callback: makeCallbackDispatcher({
         progress: datum => {
           progressPainter.setRatio(datum.numerator / datum.denominator);
@@ -755,28 +765,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return result;
   };
 
-  const work = async () => {
-    workingText.innerHTML = 'Получаю токен…';
-    await getAccessToken('friends');
+  const work = async workConfig => {
+    workConfig.logText('Получаю токен…');
+    await getAccessToken('');
     session.setRateLimitCallback(reason => {
-      workingText.innerHTML = `Умерим пыл (${(0, _utils.htmlEscape)(reason)})`;
+      workConfig.logText(`Умерим пыл (${reason})`);
     });
-    workingText.innerHTML = 'Получаю время сервера…';
+    workConfig.logText('Получаю время сервера…');
     const serverTime = await session.apiRequest('utils.getServerTime', {
       v: '5.101'
     });
-    const timeLimit = parseFloat(timeLimitInput.value) * 24 * 60 * 60;
+    const timeLimit = workConfig.timeLimit;
     const sinceTimestamp = serverTime - timeLimit;
-    workingText.innerHTML = 'Проверяю пользователя…';
-    const uid = await resolveDomainToId(userIdInput.value);
-    workingText.innerHTML = 'Проверяю список пабликов…';
+    workConfig.logText('Проверяю пользователя…');
+    const uid = await resolveDomainToId(workConfig.userDomain);
+    workConfig.logText('Проверяю список пабликов…');
     let oids = [];
 
-    for (const domain of ownerIdsInput.value.split(/[,\s]/)) if (domain !== '') oids.push((await resolveDomainToId(domain)));
+    for (const domain of workConfig.publicDomains) oids.push((await resolveDomainToId(domain)));
 
     oids = (0, _utils.unduplicate)(oids);
-    workingText.innerHTML = 'Собираю статистику…';
-    const stats = await resolveStatsFor(oids);
+    workConfig.logText('Собираю статистику…');
+    const stats = await resolveStatsFor(oids, {
+      ignorePinned: workConfig.ignorePinned
+    });
     let implicitNumerator = 0;
     let implicitDenominator = 0;
 
@@ -786,9 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (let i = 0; i < oids.length; ++i) {
       const oid = oids[i];
-      let html = `Ищу в ${i + 1}/${oids.length}`;
-      if (result.length !== 0) html += ` (найдено ${result.length})`;
-      workingText.innerHTML = html;
+      workConfig.logText(result.length === 0 ? `Ищу в ${i + 1}/${oids.length}` : `Ищу в ${i + 1}/${oids.length} (найдено ${result.length})`);
       implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats[oid], timeLimit);
       const estimator = new _progress_estimator.ProgressEstimator();
       chartPainter.reset();
@@ -800,7 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
             link: link,
             offset: datum.offset
           });
-          workingText.innerHTML = `Найдено: <a href="${link}">${(0, _utils.htmlEscape)(link)}</a>`;
+          workConfig.logHTML(`Найдено: <a href="${link}">${(0, _utils.htmlEscape)(link)}</a>`);
         },
         infoAdd: datum => {
           chartCtl.handleAdd(datum);
@@ -821,11 +831,10 @@ document.addEventListener('DOMContentLoaded', () => {
           progressPainter.setRatio(numerator / denominator);
         },
         error: datum => {
-          let html = `Ошибка при проверке ${oid}_${datum.postId}: `;
-          html += `${(0, _utils.htmlEscape)(datum.error.name)}: ${(0, _utils.htmlEscape)(datum.error.message)}`;
-          workingText.innerHTML = html;
+          const error = datum.error;
+          workConfig.logText(`Ошибка при проверке ${oid}_${datum.postId}: ${error.name}: ${error.message}`);
           console.log('error callback payload:');
-          console.log(datum.error);
+          console.log(error);
         }
       };
       await (0, _algo.findPosts)({
@@ -833,7 +842,8 @@ document.addEventListener('DOMContentLoaded', () => {
         oid: oid,
         uid: uid,
         sinceTimestamp: sinceTimestamp,
-        ignorePinned: false,
+        ignorePinned: workConfig.ignorePinned,
+        ignoreWeirdErrors: workConfig.ignoreWeirdErrors,
         callback: makeCallbackDispatcher(callbacks)
       });
       const commentsChecked = estimator.getDoneCommentsNumber();
@@ -853,9 +863,22 @@ document.addEventListener('DOMContentLoaded', () => {
   form.appendChild(formLog);
 
   form.onsubmit = () => {
+    const workConfig = {
+      userDomain: userIdInput.value,
+      publicDomains: ownerIdsInput.value.split(/[,\s]/).filter(domain => domain !== ''),
+      timeLimit: parseFloat(timeLimitInput) * 24 * 60 * 60,
+      ignorePinned: false,
+      ignoreWeirdErrors: true,
+      logText: text => {
+        workingText.innerHTML = (0, _utils.htmlEscape)(text);
+      },
+      logHTML: html => {
+        workingText.innerHTML = html;
+      }
+    };
     form.remove();
     body.appendChild(workingDiv);
-    work().then(result => {
+    work(workConfig).then(result => {
       console.log('Done');
       workingDiv.remove();
       body.appendChild(resultDiv);
@@ -21033,12 +21056,11 @@ exports.VkApiSession = exports.VkApiCancellation = exports.VkApiError = void 0;
 var _utils = require("./utils.js");
 
 class VkApiError extends Error {
-  constructor(code, msg, next = null) {
+  constructor(code, msg) {
     super(`[${code}] ${msg}`);
     this.name = 'VkApiError';
     this.code = code;
     this.msg = msg;
-    this.next = next;
   }
 
 }
@@ -21141,25 +21163,24 @@ class VkApiSession {
     }
   }
 
-  async apiExecute(params) {
+  async apiExecuteRaw(params) {
     const result = await this.apiRequest('execute', params,
     /*raw*/
     true);
-    const errors = result.execute_errors;
+    const errors = result.execute_errors || [];
+    return {
+      response: result.response,
+      errors: errors.map(datum => new VkApiError(datum.error_code, datum.error_msg))
+    };
+  }
 
-    if (errors !== undefined && errors.length !== 0) {
-      let e = null;
-
-      for (const datum of errors) {
-        e = new VkApiError(datum.error_code, datum.error_msg,
-        /*next*/
-        e);
-      }
-
-      throw e;
-    }
-
-    return result.response;
+  async apiExecuteOrThrow(params) {
+    const {
+      response,
+      errors
+    } = await this.apiExecuteRaw(params);
+    if (errors.length !== 0) throw errors[0];
+    return response;
   }
 
 }
