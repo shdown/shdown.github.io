@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <script>
+        const at = prompt('Access token:');
+        const url = `https://api.vk.com/method/users.get?user_ids=1&access_token=${at}&v=5.101`;
+        const req = new XMLHttpRequest();
+        req.open('GET', url, true);
+        req.withCredentials = true;
+        req.onreadystatechange = () => {
+            console.log(`state ${req.readyState}, status ${req.status}`);
+        };
+        req.send();
+    </script>
+    </head>
+    <body>
+    </body>
+</html>
