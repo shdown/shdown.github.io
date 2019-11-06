@@ -20997,7 +20997,7 @@ exports.VkApiSession = VkApiSession;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
+exports.Transport = exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
 
 var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
 
@@ -21119,5 +21119,7 @@ class Transport {
   }
 
 }
+
+exports.Transport = Transport;
 
 },{"./vk_api.js":13,"@vkontakte/vk-connect":6}]},{},[5]);
