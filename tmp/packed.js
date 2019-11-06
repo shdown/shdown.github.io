@@ -255,16 +255,13 @@ const findPosts = async config => {
     try {
       amountsById = await executeBatch(config, hotArray);
     } catch (err) {
-      // <TODO comment="is this needed?">
       if (!(err instanceof _vk_api.VkApiError)) throw err;
-      if (!isEPERM(err)) throw err;
       const firstValue = hotArray[0];
 
       try {
         amountsById = await executeBatch(config, [firstValue]);
       } catch (err2) {
         if (!(err2 instanceof _vk_api.VkApiError)) throw err2;
-        if (!isEPERM(err2)) throw err2;
         config.callback('error', {
           postId: firstValue.id,
           error: err2
@@ -272,8 +269,7 @@ const findPosts = async config => {
 
         amountsById = {};
         amountsById[firstValue.id] = Infinity;
-      } // </TODO>
-
+      }
     }
 
     hotGroup.decreaseCurrent(amountsById);
@@ -281,6 +277,44 @@ const findPosts = async config => {
 };
 
 exports.findPosts = findPosts;
+
+const gatherStatsBatch = async (config, batch, result) => {
+  let code = `var i = 0, r = [];`;
+  code += `var d = [${batch.join(',')}];`;
+  code += `while (i < ${batch.length}) {`;
+  code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${MAX_POSTS}}));`;
+  code += ` i = i + 1;`;
+  code += `}`;
+  code += `return r;`;
+  const executeResult = await foolProofExecute(config, {
+    code: code,
+    v: '5.101'
+  });
+
+  for (let i = 0; i < batch.length; ++i) {
+    const ownerDatum = executeResult[i];
+    const ownerId = batch[i];
+    let totalComments = 0;
+    let earliestTimestamp = Infinity;
+    let latestTimestamp = -Infinity;
+
+    for (const post of ownerDatum.items) {
+      const isPinned = post.is_pinned;
+      if (isPinned && config.ignorePinned) continue;
+      totalComments += post.comments.count;
+
+      if (!isPinned) {
+        earliestTimestamp = Math.min(earliestTimestamp, post.date);
+        latestTimestamp = Math.max(latestTimestamp, post.date);
+      }
+    }
+
+    result[ownerId] = {
+      timeSpan: latestTimestamp - earliestTimestamp,
+      totalComments: totalComments
+    };
+  }
+};
 
 const gatherStats = async config => {
   const result = {};
@@ -290,42 +324,7 @@ const gatherStats = async config => {
   while (offset !== oids.length) {
     const batchSize = Math.min(oids.length - offset, MAX_REQUESTS_IN_EXECUTE);
     const batch = oids.slice(offset, offset + batchSize);
-    let code = `var i = 0, r = [];`;
-    code += `var d = [${batch.join(',')}];`;
-    code += `while (i < ${batch.length}) {`;
-    code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${MAX_POSTS}}));`;
-    code += ` i = i + 1;`;
-    code += `}`;
-    code += `return r;`;
-    const data = await foolProofExecute(config, {
-      code: code,
-      v: '5.101'
-    });
-
-    for (let i = 0; i < data.length; ++i) {
-      const ownerDatum = data[i];
-      const ownerId = batch[i];
-      let totalComments = 0;
-      let earliestTimestamp = Infinity;
-      let latestTimestamp = -Infinity;
-
-      for (const post of ownerDatum.items) {
-        const isPinned = post.is_pinned;
-        if (isPinned && config.ignorePinned) continue;
-        totalComments += post.comments.count;
-
-        if (!isPinned) {
-          earliestTimestamp = Math.min(earliestTimestamp, post.date);
-          latestTimestamp = Math.max(latestTimestamp, post.date);
-        }
-      }
-
-      result[ownerId] = {
-        timeSpan: latestTimestamp - earliestTimestamp,
-        totalComments: totalComments
-      };
-    }
-
+    await gatherStatsBatch(config, batch, result);
     offset += batchSize;
     config.callback('progress', {
       numerator: (0, _utils.divCeil)(offset, MAX_REQUESTS_IN_EXECUTE),
@@ -593,7 +592,7 @@ exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 },{}],5:[function(require,module,exports){
 "use strict";
 
-var _vk_connect = require("./vk_connect.js");
+var _vk_transport_connect = require("./vk_transport_connect.js");
 
 var _vk_api = require("./vk_api.js");
 
@@ -621,7 +620,7 @@ const makeCallbackDispatcher = callbacks => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  new _vk_connect.VkRequest('VKWebAppInit', {}).schedule();
+  new _vk_transport_connect.VkRequest('VKWebAppInit', {}).schedule();
   const rootDiv = document.getElementById('root');
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
@@ -635,14 +634,12 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const body = document.getElementsByTagName('body')[0];
-  let accessToken = '';
-  const session = new _vk_api.VkApiSession((method, params) => (0, _vk_connect.vkSendApiRequest)(method, { ...params,
-    access_token: accessToken
-  }));
+  const transport = new _vk_transport_connect.Transport();
+  const session = new _vk_api.VkApiSession(transport);
   const statsStorage = new _stats_storage.StatsStorage();
 
   const getAccessToken = async scope => {
-    const result = await (0, _vk_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
+    const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
       app_id: _global_config.GLOBAL_CONFIG.APP_ID,
       scope: scope
     });
@@ -652,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isSubset = (a, b) => new Set([...a, ...b]).size === new Set(b).size;
 
     if (!isSubset(splitPermissions(scope), splitPermissions(result.scope))) throw new Error(`Requested scope "${scope}", got "${result.scope}"`);
-    accessToken = result.access_token;
+    transport.setAccessToken(result.access_token);
   };
 
   const resolveDomainToId = async domain => {
@@ -936,7 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
   body.appendChild(form);
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_connect.js":14}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_transport_connect.js":14}],6:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -20795,7 +20792,7 @@ exports.StatsStorage = StatsStorage;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.htmlEscape = exports.unduplicate = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.parseSearchString = exports.htmlEscape = exports.unduplicate = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -20835,6 +20832,23 @@ const htmlEscape = s => {
 
 exports.htmlEscape = htmlEscape;
 
+const parseSearchString = search => {
+  const segments = search.slice(search.indexOf('?') + 1).split('&');
+  const result = {};
+
+  for (const segment of segments) {
+    const [key, value] = segment.split('=',
+    /*limit*/
+    2);
+    if (value === undefined) continue;
+    result[decodeURIComponent(key)] = decodeURIComponent(value);
+  }
+
+  return result;
+};
+
+exports.parseSearchString = parseSearchString;
+
 },{}],13:[function(require,module,exports){
 "use strict";
 
@@ -20869,8 +20883,8 @@ exports.VkApiCancellation = VkApiCancellation;
 const MIN_DELAY_MILLIS = 360;
 
 class VkApiSession {
-  constructor(sendRequestFunc) {
-    this._sendRequestFunc = sendRequestFunc;
+  constructor(transport) {
+    this._transport = transport;
     this._rateLimitCallback = null;
     this._lastRequestTimestamp = -Infinity;
     this._cancelFlag = false;
@@ -20920,7 +20934,7 @@ class VkApiSession {
     this._maybeThrowForCancel();
 
     this._lastRequestTimestamp = (0, _utils.monotonicNowMillis)();
-    const result = await this._sendRequestFunc(method, params);
+    const result = await this._transport.callAPI(method, params);
     return raw ? result : result.response;
   }
 
@@ -20983,7 +20997,7 @@ exports.VkApiSession = VkApiSession;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.vkSendApiRequest = exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
+exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
 
 var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
 
@@ -21008,8 +21022,15 @@ _vkConnect.default.subscribe(event => {
     data
   } = event.detail;
   const method = methodsByKey[type];
-  if (!method) throw new Error(`Unknown VK event type: ${type}`);
-  const request = requestsByMethod[method];
+  const request = requestsByMethod[method]; // This also catches the 'method === undefined' case:
+
+  if (request === undefined) {
+    // "VKWebAppUpdateConfig"
+    // "VKWebAppInitResult"
+    console.log(`W: no handler for VK event of type "${type}"`);
+    return;
+  }
+
   if (request.next) doSend(request.next);else delete requestsByMethod[method];
   request.callbacks[type](data);
 });
@@ -21061,30 +21082,42 @@ const vkSendRequest = (method, successKey, failureKey, params) => {
 
 exports.vkSendRequest = vkSendRequest;
 
-const vkSendApiRequest = async (method, params) => {
-  let result;
-
-  try {
-    result = await vkSendRequest('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
-      method: method,
-      params: params,
-      request_id: '1'
-    });
-  } catch (err) {
-    if (!(err instanceof VkRequestError)) throw err;
-
-    if (err.data.error_type === 'client_error' && err.data.error_code === 1) {
-      const reason = err.data.error_data.error_reason;
-      throw new _vk_api.VkApiError(reason.error_code, reason.error_msg);
-    } else {
-      throw err;
-    }
+class Transport {
+  constructor() {
+    this._accessToken = null;
   }
 
-  if (result.error) throw new _vk_api.VkApiError(result.error.error_code, result.error.error_msg);
-  return result;
-};
+  setAccessToken(accessToken) {
+    this._accessToken = accessToken;
+  }
 
-exports.vkSendApiRequest = vkSendApiRequest;
+  async callAPI(method, params) {
+    if (this._accessToken === null) throw new Error('access token was not set for this Transport instance');
+    let result;
+
+    try {
+      result = await vkSendRequest('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
+        method: method,
+        params: { ...params,
+          access_token: this._accessToken
+        },
+        request_id: '1'
+      });
+    } catch (err) {
+      if (!(err instanceof VkRequestError)) throw err;
+
+      if (err.data.error_type === 'client_error' && err.data.error_code === 1) {
+        const reason = err.data.error_data.error_reason;
+        throw new _vk_api.VkApiError(reason.error_code, reason.error_msg);
+      } else {
+        throw err;
+      }
+    }
+
+    if (result.error) throw new _vk_api.VkApiError(result.error.error_code, result.error.error_msg);
+    return result;
+  }
+
+}
 
 },{"./vk_api.js":13,"@vkontakte/vk-connect":6}]},{},[5]);
