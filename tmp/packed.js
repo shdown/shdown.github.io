@@ -742,6 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   getSubsBtn.onclick = () => {
     getSubscriptions(userIdInput.value).then(result => {
+      if (result.length === 0) formLog.innerHTML = `Подписок не найдено!`;
       ownerIdsInput.value = result.join('\n');
     }).catch(err => {
       formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
