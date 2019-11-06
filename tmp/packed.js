@@ -14,6 +14,8 @@ const MAX_POSTS = 100;
 const MAX_COMMENTS = 100;
 const MAX_REQUESTS_IN_EXECUTE = 25;
 
+const isEPERM = err => err.code === 7;
+
 class Reader {
   constructor(config) {
     this._config = config;
@@ -241,8 +243,6 @@ const executeBatch = async (config, hotArray) => {
   return amountsById;
 };
 
-const isEPERM = err => err.code === 7;
-
 const findPosts = async config => {
   const reader = new Reader(config);
   const hotGroup = new HotGroup(config, reader, MAX_REQUESTS_IN_EXECUTE);
@@ -255,6 +255,7 @@ const findPosts = async config => {
     try {
       amountsById = await executeBatch(config, hotArray);
     } catch (err) {
+      // <TODO comment="is this needed?">
       if (!(err instanceof _vk_api.VkApiError)) throw err;
       if (!isEPERM(err)) throw err;
       const firstValue = hotArray[0];
@@ -271,7 +272,8 @@ const findPosts = async config => {
 
         amountsById = {};
         amountsById[firstValue.id] = Infinity;
-      }
+      } // </TODO>
+
     }
 
     hotGroup.decreaseCurrent(amountsById);
@@ -620,6 +622,18 @@ const makeCallbackDispatcher = callbacks => {
 
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_connect.VkRequest('VKWebAppInit', {}).schedule();
+  const rootDiv = document.getElementById('root');
+
+  window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
+    const span = document.createElement('span');
+    span.innerHTML = (0, _utils.htmlEscape)(`Ошибка: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
+    span.style = 'color: red;';
+    rootDiv.appendChild(span);
+    console.log('Error object:');
+    console.log(errorObj);
+    return false;
+  };
+
   const body = document.getElementsByTagName('body')[0];
   let accessToken = '';
   const session = new _vk_api.VkApiSession((method, params) => (0, _vk_connect.vkSendApiRequest)(method, { ...params,
@@ -852,7 +866,6 @@ document.addEventListener('DOMContentLoaded', () => {
         uid: uid,
         sinceTimestamp: sinceTimestamp,
         ignorePinned: workConfig.ignorePinned,
-        ignoreWeirdErrors: workConfig.ignoreWeirdErrors,
         callback: makeCallbackDispatcher(callbacks)
       });
       const commentsChecked = estimator.getDoneCommentsNumber();
@@ -877,7 +890,6 @@ document.addEventListener('DOMContentLoaded', () => {
       publicDomains: ownerIdsInput.value.split(/[,\s]/).filter(domain => domain !== ''),
       timeLimit: parseFloat(timeLimitInput.value) * 24 * 60 * 60,
       ignorePinned: false,
-      ignoreWeirdErrors: true,
       logText: text => {
         workingText.innerHTML = (0, _utils.htmlEscape)(text);
       },
@@ -918,243 +930,9 @@ document.addEventListener('DOMContentLoaded', () => {
       resultDiv.innerHTML = `Произошла ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
     });
     return false;
-  }; //-------------------------------------------------------------------------------------
+  };
 
-
-  body.appendChild(form); //    const textElement = document.createElement('div');
-  //
-  //    const setMode = (mode) => {
-  //        progressPainter.reset();
-  //        chartPainter.reset();
-  //        const chartElement = chartPainter.element;
-  //        switch (mode) {
-  //        case 'chart':
-  //            chartElement.style.display = 'block';
-  //            textElement.style.display = 'none';
-  //            break;
-  //        case 'text':
-  //            chartElement.style.display = 'none';
-  //            textElement.style.display = 'block';
-  //            break;
-  //        default:
-  //            throw `unknown mode "${mode}"`;
-  //        }
-  //    };
-  //    setMode('chart');
-  //
-  //    //const logArea = document.createElement('div');
-  //    //const resetLogArea = () => {
-  //    //    logArea.innerHTML = '<hr/><b>Log area:</b>';
-  //    //    const clearBtn = document.createElement('input');
-  //    //    clearBtn.setAttribute('type', 'button');
-  //    //    clearBtn.setAttribute('value', 'Clear');
-  //    //    clearBtn.onclick = () => {
-  //    //        resetLogArea();
-  //    //        return false;
-  //    //    };
-  //    //    logArea.appendChild(clearBtn);
-  //    //};
-  //    //resetLogArea();
-  //
-  //    const say = what => {
-  //        console.log(what);
-  //        //const line = document.createElement('div');
-  //        //line.innerHTML = htmlEscape(what);
-  //        //logArea.appendChild(line);
-  //    };
-  //
-  //    const work = async (uid, gids, timeLimitDays) => {
-  //        accessToken = await getAccessToken('');
-  //        session.setRateLimitCallback(reason => {
-  //            say(`We are being too fast (${reason})!`);
-  //        });
-  //        say('Getting server time...');
-  //        const serverTime = await session.apiRequest('utils.getServerTime', {v: '5.101'});
-  //        const timeLimit = timeLimitDays * 24 * 60 * 60;
-  //        const sinceTimestamp = serverTime - timeLimit;
-  //        gids = unduplicate(gids);
-  //        const oidsToStats = await resolveStatsFor(gids);
-  //
-  //        let implicitNumerator = 0;
-  //
-  //        let implicitDenominator = 0;
-  //        for (const oid in oidsToStats)
-  //            implicitDenominator += ProgressEstimator.statsToExpectedCommentsCount(
-  //                oidsToStats[oid], timeLimit);
-  //
-  //        for (const oid of gids) {
-  //            implicitDenominator -= ProgressEstimator.statsToExpectedCommentsCount(
-  //                oidsToStats[oid], timeLimit);
-  //
-  //            const estimator = new ProgressEstimator();
-  //            chartPainter.reset();
-  //            const chartCtl = new ChartController(30, chartPainter);
-  //
-  //            const callbacks = {
-  //                found: datum => {
-  //                    const link = `https://vk.com/wall${oid}_${datum.postId}`;
-  //                    console.log(`FOUND: ${link}`);
-  //                    const a = document.createElement('a');
-  //                    a.style.display = 'block';
-  //                    a.setAttribute('href', link);
-  //                    a.innerHTML = htmlEscape(link);
-  //                    textElement.appendChild(a);
-  //                },
-  //                infoAdd: datum => {
-  //                    chartCtl.handleAdd(datum);
-  //                    estimator.handleAdd(datum);
-  //                },
-  //                infoUpdate: datum => {
-  //                    chartCtl.handleUpdate(datum);
-  //                    estimator.handleUpdate(datum);
-  //                },
-  //                infoFlush: _ => {
-  //                    chartCtl.handleFlush();
-  //
-  //                    const explicitNumerator = estimator.getDoneCommentsNumber();
-  //                    const explicitDenominator = ProgressEstimator.statsToExpectedCommentsCount(
-  //                        estimator.getStats(), timeLimit);
-  //                    const numerator = explicitNumerator + implicitNumerator;
-  //                    const denominator = explicitDenominator + implicitDenominator;
-  //                    progressPainter.setRatio(numerator / denominator);
-  //                },
-  //            };
-  //            say('Transferring control to findPosts()...');
-  //            await findPosts({
-  //                session: session,
-  //                oid: oid,
-  //                uid: uid,
-  //                sinceTimestamp: sinceTimestamp,
-  //                ignorePinned: false,
-  //                callback: makeCallbackDispatcher(callbacks),
-  //            });
-  //
-  //            const commentsChecked = estimator.getDoneCommentsNumber();
-  //            implicitNumerator += commentsChecked;
-  //            implicitDenominator += commentsChecked;
-  //            statsStorage.setStats(oid, estimator.getStats());
-  //        }
-  //    };
-  //
-  //    const getSubs = async (uid) => {
-  //        accessToken = await getAccessToken('');
-  //        session.setRateLimitCallback(reason => {
-  //            say(`We are being too fast (${reason})!`);
-  //        });
-  //        const resp = await session.apiRequest('users.getSubscriptions', {
-  //            user_id: uid,
-  //            v: '5.103',
-  //        });
-  //        const result = [];
-  //        for (const id of resp.users.items)
-  //            result.push(id);
-  //        for (const id of resp.groups.items)
-  //            result.push(-id);
-  //        return result;
-  //    };
-  //
-  //    const form = document.createElement('form');
-  //
-  //    const uid_div = document.createElement('span');
-  //    uid_div.innerHTML = 'User ID: ';
-  //
-  //    const uid_input = document.createElement('input');
-  //    uid_input.style.width = '15%';
-  //    uid_input.setAttribute('type', 'number');
-  //    uid_input.setAttribute('required', '1');
-  //
-  //    const gid_div = document.createElement('span');
-  //    gid_div.innerHTML = 'Group ID(s): ';
-  //
-  //    const gid_input = document.createElement('input');
-  //    gid_input.style.width = '15%';
-  //    gid_input.setAttribute('type', 'text');
-  //    gid_input.setAttribute('required', '1');
-  //
-  //    const tl_div = document.createElement('span');
-  //    tl_div.innerHTML = 'Time limit (days): ';
-  //
-  //    const tl_input = document.createElement('input');
-  //    tl_input.setAttribute('type', 'number');
-  //    tl_input.style.width = '10%';
-  //    tl_input.setAttribute('value', '7');
-  //    tl_input.setAttribute('required', '1');
-  //
-  //    const btn_div = document.createElement('span');
-  //
-  //    const submitBtn = document.createElement('input');
-  //    submitBtn.setAttribute('type', 'submit');
-  //
-  //    const cancelBtn = document.createElement('input');
-  //    cancelBtn.setAttribute('type', 'button');
-  //    cancelBtn.setAttribute('value', 'Cancel');
-  //    cancelBtn.onclick = () => {
-  //        session.cancel();
-  //        return false;
-  //    };
-  //
-  //    const subsBtn = document.createElement('input');
-  //    subsBtn.setAttribute('type', 'button');
-  //    subsBtn.setAttribute('value', 'Get subs');
-  //    subsBtn.onclick = () => {
-  //        const uid = parseInt(uid_input.value);
-  //        getSubs(uid)
-  //            .then(gids => gid_input.value = gids.join(','))
-  //            .catch(err => {
-  //                say('Error...');
-  //                setMode('text');
-  //                textElement.innerHTML = htmlEscape(`ERROR: ${err.name}: ${err.message}`);
-  //                console.log(err);
-  //            });
-  //        return false;
-  //    };
-  //
-  //    form.onsubmit = () => {
-  //        const uid = parseInt(uid_input.value);
-  //        const gids = gid_input.value.split(',').map(s => parseInt(s));
-  //        const tl = parseFloat(tl_input.value);
-  //
-  //        setMode('chart');
-  //        textElement.innerHTML = '';
-  //
-  //        const startTime = monotonicNowMillis();
-  //        work(uid, gids, tl)
-  //            .then(() => {
-  //                say('Done...');
-  //                setMode('text');
-  //                const seconds = (monotonicNowMillis() - startTime) / 1000;
-  //                textElement.append(`Done, took ${Math.round(seconds)} s.`);
-  //            })
-  //            .catch(err => {
-  //                // TODO check if it's cancellation
-  //                say('Error...');
-  //                setMode('text');
-  //                textElement.innerHTML = htmlEscape(`ERROR: ${err.name}: ${err.message}`);
-  //                console.log(err);
-  //            });
-  //
-  //        // Do not reload the page!
-  //        return false;
-  //    };
-  //
-  //    uid_div.appendChild(uid_input);
-  //    gid_div.appendChild(gid_input);
-  //    tl_div.appendChild(tl_input);
-  //    btn_div.appendChild(submitBtn);
-  //    btn_div.appendChild(cancelBtn);
-  //
-  //    form.appendChild(uid_div);
-  //    form.appendChild(gid_div);
-  //    form.appendChild(tl_div);
-  //    form.appendChild(btn_div);
-  //    form.appendChild(subsBtn);
-  //
-  //    body.appendChild(form);
-  //    body.appendChild(progressPainter.element);
-  //    body.appendChild(chartPainter.element);
-  //    body.appendChild(textElement);
-  //
-  //    say('Initialized');
+  body.appendChild(form);
 });
 
 },{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_connect.js":14}],6:[function(require,module,exports){
