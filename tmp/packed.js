@@ -194,14 +194,7 @@ const foolProofExecute = async (config, params) => {
     response,
     errors
   } = await config.session.apiExecuteRaw(params);
-  if (errors.length === 0) return response;
-
-  if (Array.isArray(response) && response.length !== 0) {
-    for (const error of errors) if (!isEPERM(error)) throw error;
-
-    return response;
-  }
-
+  if (errors.length === 0 || Array.isArray(response)) return response;
   throw errors[0];
 };
 
@@ -225,8 +218,9 @@ const executeBatch = async (config, hotArray) => {
   const amountsById = {};
 
   for (let i = 0; i < batch.length; ++i) {
-    const datum = batch[i];
     const posterIds = executeResult[i];
+    if (!Array.isArray(posterIds)) continue;
+    const datum = batch[i];
     const oldAmount = amountsById[datum.id] || 0;
 
     if (posterIds.indexOf(config.uid) !== -1) {
@@ -293,12 +287,15 @@ const gatherStatsBatch = async (config, batch, result) => {
 
   for (let i = 0; i < batch.length; ++i) {
     const ownerDatum = executeResult[i];
+    if (typeof ownerDatum !== 'object') continue;
+    const posts = ownerDatum.items;
+    if (!Array.isArray(posts)) continue;
     const ownerId = batch[i];
     let totalComments = 0;
     let earliestTimestamp = Infinity;
     let latestTimestamp = -Infinity;
 
-    for (const post of ownerDatum.items) {
+    for (const post of posts) {
       const isPinned = post.is_pinned;
       if (isPinned && config.ignorePinned) continue;
       totalComments += post.comments.count;
@@ -819,8 +816,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (let i = 0; i < oids.length; ++i) {
       const oid = oids[i];
+      const stat = stats[oid];
+      if (stat === undefined) continue;
       workConfig.logText(result.length === 0 ? `Ищу в ${i + 1}/${oids.length}` : `Ищу в ${i + 1}/${oids.length} (найдено ${result.length})`);
-      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats[oid], timeLimit);
+      implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stat, timeLimit);
       const estimator = new _progress_estimator.ProgressEstimator();
       chartPainter.reset();
       const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
