@@ -651,6 +651,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const resolveDomainToId = async domain => {
     if (domain.match(/^-?\d+$/) !== null) return parseInt(domain);
+    let m = domain.match(/^.*\/(.*)$/);
+    if (m !== null) domain = m[1];
     const resp = await session.apiRequest('utils.resolveScreenName', {
       screen_name: domain,
       v: '5.103'

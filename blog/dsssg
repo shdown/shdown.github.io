@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+from datetime import datetime
+import os
+import argparse
+from typing import NewType, Optional, Dict, Any
+import markdown
+from slugify import slugify
+import mako.template
+import mako.runtime
+import mako.lookup
+
+
+FilePath = NewType('FilePath', str)
+
+
+FileName = NewType('FileName', str)
+
+
+BaseName = NewType('BaseName', str)
+
+
+TPL_LOOKUP = mako.lookup.TemplateLookup(directories=['templates/include'])
+
+
+def read_template(filepath: FilePath) -> mako.template.Template:
+    with open(filepath, 'r') as infile:
+        return mako.template.Template(infile.read(), lookup=TPL_LOOKUP)
+
+
+def render_to(
+        tpl: mako.template.Template,
+        outfilepath: FilePath,
+        args: Optional[Dict[str, Any]] = None) -> None:
+    args = args or {}
+    with open(outfilepath, 'w') as outfile:
+        tpl.render_context(mako.runtime.Context(outfile, **args))
+
+
+class FileFormatException(Exception):
+    def __init__(self, filepath: FilePath, message: str) -> None:
+        super().__init__(f'{filepath}: {message}')
+
+
+class FileNameFormatException(Exception):
+    def __init__(self, filename: FileName, message: str) -> None:
+        super().__init__(f'{filename}: {message}')
+
+
+class PostFile:
+    def __init__(self, basename: BaseName, timestamp: int) -> None:
+        self.basename = basename
+        self.timestamp = timestamp
+
+
+class PostContent:
+    def __init__(self, title: str, body_html: str) -> None:
+        self.title = title
+        self.body_html = body_html
+
+
+class Post:
+    def __init__(self, created_at: datetime, basename: BaseName, content: PostContent) -> None:
+        self.created_at = created_at
+        self.basename = basename
+        self.content = content
+
+
+def parse_post_content(filepath: FilePath) -> PostContent:
+    with open(filepath, 'r') as infile:
+        title = infile.readline().rstrip('\n')
+
+        if infile.readline() != '~~~\n':
+            raise FileFormatException(filepath, 'second line is not "~~~"')
+        if infile.readline() != '\n':
+            raise FileFormatException(filepath, 'third line is not empty')
+
+        body_html = markdown.markdown(infile.read(), safe_mode='escape')
+
+        return PostContent(title=title, body_html=body_html)
+
+
+def parse_post(post_file: PostFile) -> Post:
+    return Post(created_at=datetime.fromtimestamp(post_file.timestamp),
+                basename=post_file.basename,
+                content=parse_post_content(f'content/{post_file.basename}.md'))
+
+
+def parse_post_filename(filename: FileName) -> PostFile:
+    basename, ext = os.path.splitext(filename)
+    if ext != '.md':
+        raise FileNameFormatException(filename, 'is not a .md file')
+    timestamp_s, *mb_title = basename.split('-', maxsplit=1)
+    if not mb_title:
+        raise FileNameFormatException(filename, 'has no timestamp')
+    try:
+        timestamp = int(timestamp_s)
+    except ValueError:
+        raise FileNameFormatException(filename, 'has invalid timestamp')
+    return PostFile(basename=basename, timestamp=timestamp)
+
+
+def generate_pages(posts_per_page: int) -> None:
+    page_tpl = read_template('templates/page.tpl')
+
+    post_files = [parse_post_filename(filename) for filename in os.listdir('content')]
+    post_files.sort(key=lambda post_file: post_file.timestamp, reverse=True)
+
+    npages = 1 + (len(post_files) - 1) // posts_per_page
+    cur_page_index = 0
+    cur_page_posts = []
+
+    def _generate_page() -> None:
+        render_to(page_tpl, f'siteroot/blog-{cur_page_index}.html', {
+            'posts': cur_page_posts,
+            'page_index': cur_page_index,
+            'npages': npages,
+        })
+
+    for post_file in post_files:
+        cur_page_posts.append(parse_post(post_file))
+        if len(cur_page_posts) == posts_per_page:
+            _generate_page()
+            cur_page_posts.clear()
+            cur_page_index += 1
+
+    if cur_page_posts or not npages:
+        _generate_page()
+
+
+def generate_post(basename: BaseName) -> None:
+    post_tpl = read_template('templates/post.tpl')
+    post = parse_post(parse_post_filename(f'{basename}.md'))
+    render_to(post_tpl, f'siteroot/post-{basename}.html', {'post': post})
+
+
+def print_post_basename(filepath: FilePath) -> None:
+    content = parse_post_content(filepath)
+    slug_title = slugify(content.title, max_length=80, word_boundary=True)
+    timestamp_s = datetime.now().strftime('%015s')
+    print(f'{timestamp_s}-{slug_title}')
+
+
+def render_custom(basename: BaseName) -> None:
+    tpl = read_template(f'templates/custom/{basename}.tpl')
+    render_to(tpl, f'siteroot/{basename}.html')
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    cmds = parser.add_subparsers(title='commands', dest='command')
+    cmds.required = True
+
+    pages_cmd = cmds.add_parser('pages')
+    pages_cmd.set_defaults(func=lambda args: generate_pages(args.posts_per_page))
+    pages_cmd.add_argument('posts_per_page', type=int)
+
+    post_cmd = cmds.add_parser('post')
+    post_cmd.set_defaults(func=lambda args: generate_post(args.basename))
+    post_cmd.add_argument('basename')
+
+    basename_cmd = cmds.add_parser('get-basename')
+    basename_cmd.set_defaults(func=lambda args: print_post_basename(args.file))
+    basename_cmd.add_argument('file')
+
+    render_cmd = cmds.add_parser('render-custom')
+    render_cmd.set_defaults(func=lambda args: render_custom(args.basename))
+    render_cmd.add_argument('basename')
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,2 @@
+EDITOR ?= vim
+POSTS_PER_PAGE := 50
