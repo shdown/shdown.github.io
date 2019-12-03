@@ -20943,7 +20943,9 @@ class Cache {
         index: index,
         value: value
       };
-      data.push(newDatum);
+
+      this._data.push(newDatum);
+
       this._rawKeysToData[rawKey] = newDatum;
     }
 
@@ -21024,8 +21026,6 @@ class RateLimitedStorage {
       index = (index + 1) % limit;
       prefix = '';
     }
-
-    return result;
   }
 
   async write(key, data) {
