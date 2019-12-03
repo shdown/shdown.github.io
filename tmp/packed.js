@@ -334,7 +334,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":12,"./vk_api.js":13}],2:[function(require,module,exports){
+},{"./utils.js":13,"./vk_api.js":14}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -574,7 +574,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":12,"chart.js":7}],4:[function(require,module,exports){
+},{"./utils.js":13,"chart.js":7}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -608,6 +608,8 @@ var _progress_painter = require("./progress_painter.js");
 var _utils = require("./utils.js");
 
 var _stats_storage = require("./stats_storage.js");
+
+var _rlstorage = require("./rlstorage.js");
 
 const makeCallbackDispatcher = callbacks => {
   return (what, arg) => {
@@ -742,6 +744,31 @@ document.addEventListener('DOMContentLoaded', () => {
       ownerIdsInput.value = result.join('\n');
     }).catch(err => {
       formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
+    });
+    return false;
+  };
+
+  const stressTestBtn = appendInputToForm({
+    type: 'button',
+    value: 'Стресс-тест'
+  });
+
+  stressTestBtn.onclick = () => {
+    const f = async () => {
+      await getAccessToken('');
+      const limits = {
+        'k': 1000
+      };
+      const rls = new _rlstorage.RateLimitedStorage(limits, new Hardware(session));
+
+      for (let i = 0; i < 1100; ++i) {
+        console.log(`i=${i}...`);
+        await rls.write('k', '1');
+      }
+    };
+
+    f().then(() => {
+      console.log('Done');
     });
     return false;
   };
@@ -934,7 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
   body.appendChild(form);
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./stats_storage.js":11,"./utils.js":12,"./vk_api.js":13,"./vk_transport_connect.js":14}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./rlstorage.js":11,"./stats_storage.js":12,"./utils.js":13,"./vk_api.js":14,"./vk_transport_connect.js":15}],6:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -20772,6 +20799,271 @@ exports.ProgressPainter = ProgressPainter;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.RateLimitedStorage = exports.Hardware = void 0;
+
+const _parseRawKeys = rawKeys => {
+  const result = {};
+
+  for (const rawKey of rawKeys) {
+    const m = rawKey.match(/^([^0-9]+)([0-9]+)$/);
+    if (m === null) continue;
+    const key = m[1];
+    const index = parseInt(m[2]);
+    const oldIndex = result[key];
+    if (oldIndex === undefined || oldIndex < index) result[key] = index;
+  }
+
+  return result;
+};
+
+class HardwareRateLimitError extends Error {
+  constructor() {
+    super('storage API rate limit');
+    this.name = 'HardwareRateLimitError';
+  }
+
+}
+
+class Hardware {
+  constructor(session) {
+    this._session = session;
+  }
+
+  async readKeys() {
+    return await this._session.apiRequest('storage.getKeys', {
+      count: 1000
+    });
+  }
+
+  async read(rawKey) {
+    return await this._session.apiRequest('storage.get', {
+      key: rawKey
+    });
+  }
+
+  async readMany(rawKeys) {
+    const rawKeyToIndex = {};
+
+    for (let i = 0; i < rawKeys.length; ++i) rawKeyToIndex[rawKeys[i]] = i;
+
+    const data = await this._session.apiRequest('storage.get', {
+      keys: rawKeys.join(',')
+    });
+    const result = Array(rawKeys.length);
+
+    for (const datum of data) result[rawKeyToIndex[datum.key]] = datum.value;
+
+    return result;
+  }
+
+  canWrite(value) {
+    return value.length <= 4096;
+  }
+
+  async write(rawKey, value) {
+    try {
+      await this._session.apiRequest('storage.set', {
+        key: rawKey,
+        value: value
+      });
+    } catch (err) {
+      console.log(err);
+      throw new HardwareRateLimitError();
+    }
+  }
+
+}
+
+exports.Hardware = Hardware;
+
+class Cache {
+  constructor(hardware) {
+    this._data = [];
+    this._hardware = hardware;
+    this._rawKeysToData = {};
+    this._keyToCurIndex = null;
+    this._keyToLastIndex = null;
+  }
+
+  async fetchKeysIfNeeded() {
+    if (this._keyToCurIndex !== null && this._keyToLastIndex !== null) return;
+
+    const lastIndices = _parseRawKeys((await this._hardware.readKeys()));
+
+    this._keyToCurIndex = { ...lastIndices
+    };
+    this._keyToLastIndex = { ...lastIndices
+    };
+  }
+
+  canWrite(value) {
+    return this._hardware.canWrite(value);
+  }
+
+  getCurIndex(key) {
+    return this._keyToCurIndex[key];
+  }
+
+  getLastIndex(key) {
+    return this._keyToLastIndex[key];
+  }
+
+  async read(key, index) {
+    const rawKey = `${key}${index}`;
+    const datum = this._rawKeysToData[rawKey];
+    if (datum !== undefined) return datum.value;
+    return await this._hardware.read(rawKey);
+  }
+
+  async readMany(rawKeys) {
+    const result = [];
+
+    for (const rawKey of rawKeys) {
+      const datum = this._rawKeysToData[rawKey];
+      if (datum !== undefined) result.push(datum.value);
+    }
+
+    if (result.length === rawKeys.length) return result;
+    return await this._hardware.readMany(rawKeys);
+  }
+
+  write(key, index, value) {
+    const rawKey = `${key}${index}`;
+    const datum = this._rawKeysToData[rawKey];
+
+    if (datum !== undefined) {
+      datum.value = value;
+    } else {
+      const newDatum = {
+        key: key,
+        index: index,
+        value: value
+      };
+      data.push(newDatum);
+      this._rawKeysToData[rawKey] = newDatum;
+    }
+
+    this._keyToCurIndex[key] = index;
+    const oldLast = this._keyToLastIndex[key];
+    if (oldLast === undefined || oldLast < index) this._keyToLastIndex[key] = index;
+  }
+
+  async flush() {
+    let i = 0;
+
+    for (; i < this._data.length; ++i) {
+      const datum = this._data[i];
+      const rawKey = `${datum.key}${datum.index}`;
+
+      try {
+        await this._hardware.write(rawKey, datum.value);
+      } catch (err) {
+        if (!(err instanceof HardwareRateLimitError)) throw err;
+        break;
+      }
+
+      delete this._rawKeysToData[rawKey];
+    }
+
+    this._data.splice(0, i);
+  }
+
+  hasSomethingToFlush() {
+    return this._data.length !== 0;
+  }
+
+}
+
+class RateLimitedStorage {
+  constructor(perKeyLimits, hardware) {
+    this._perKeyLimits = perKeyLimits;
+    this._cache = new Cache(hardware);
+  }
+
+  _chomp(prefix, data) {
+    for (let n = data.length; n > 0; --n) {
+      const newValue = prefix + data.slice(0, n).join(';');
+      if (this._cache.canWrite(newValue)) return {
+        newValue: newValue,
+        leftover: data.slice(n)
+      };
+    }
+
+    return {
+      newValue: null,
+      leftover: data
+    };
+  }
+
+  async _scatter(key, data) {
+    let index = this._cache.getCurIndex(key);
+
+    let prefix;
+
+    if (index === undefined) {
+      index = 0;
+      prefix = '';
+    } else {
+      prefix = (await this._cache.read(key, index)) + ';';
+    }
+
+    const limit = this._perKeyLimits[key];
+
+    while (data.length !== 0) {
+      const {
+        newValue,
+        leftover
+      } = this._chomp(prefix, data);
+
+      if (newValue !== null) this._cache.write(key, index, newValue);
+      data = leftover;
+      index = (index + 1) % limit;
+      prefix = '';
+    }
+
+    return result;
+  }
+
+  async write(key, data) {
+    await this._cache.fetchKeysIfNeeded();
+    await this._scatter(key, data);
+    await this._cache.flush();
+  }
+
+  async read(key, callback) {
+    await this._cache.fetchKeysIfNeeded();
+
+    const lastIndex = this._cache.getLastIndex(key);
+
+    if (lastIndex === undefined) return;
+    const rawKeys = [];
+
+    for (let i = 0; i <= lastIndex; ++i) rawKeys.push(`${key}${i}`);
+
+    const chunks = await this._cache.readMany(rawKeys);
+
+    for (const chunk of chunks) for (const segment of chunk.split(';')) callback(segment);
+  }
+
+  hasSomethingToFlush() {
+    return this._cache.hasSomethingToFlush();
+  }
+
+  async flush() {
+    await this._cache.fetchKeysIfNeeded();
+    await this._cache.flush();
+  }
+
+}
+
+exports.RateLimitedStorage = RateLimitedStorage;
+
+},{}],12:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
 exports.StatsStorage = void 0;
 
 class StatsStorage {
@@ -20787,7 +21079,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20850,7 +21142,7 @@ const parseSearchString = search => {
 
 exports.parseSearchString = parseSearchString;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20979,20 +21271,11 @@ class VkApiSession {
     };
   }
 
-  async apiExecuteOrThrow(params) {
-    const {
-      response,
-      errors
-    } = await this.apiExecuteRaw(params);
-    if (errors.length !== 0) throw errors[0];
-    return response;
-  }
-
 }
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":12}],14:[function(require,module,exports){
+},{"./utils.js":13}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21123,4 +21406,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":13,"@vkontakte/vk-connect":6}]},{},[5]);
+},{"./vk_api.js":14,"@vkontakte/vk-connect":6}]},{},[5]);
