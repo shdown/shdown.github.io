@@ -763,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       for (let i = 0; i < 1100; ++i) {
         console.log(`i=${i}...`);
-        await rls.write('k', '1');
+        await rls.write('k', ['1']);
       }
     };
 
