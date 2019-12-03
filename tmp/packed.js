@@ -20831,13 +20831,15 @@ class Hardware {
 
   async readKeys() {
     return await this._session.apiRequest('storage.getKeys', {
-      count: 1000
+      count: 1000,
+      v: '5.103'
     });
   }
 
   async read(rawKey) {
     return await this._session.apiRequest('storage.get', {
-      key: rawKey
+      key: rawKey,
+      v: '5.103'
     });
   }
 
@@ -20847,7 +20849,8 @@ class Hardware {
     for (let i = 0; i < rawKeys.length; ++i) rawKeyToIndex[rawKeys[i]] = i;
 
     const data = await this._session.apiRequest('storage.get', {
-      keys: rawKeys.join(',')
+      keys: rawKeys.join(','),
+      v: '5.103'
     });
     const result = Array(rawKeys.length);
 
@@ -20864,7 +20867,8 @@ class Hardware {
     try {
       await this._session.apiRequest('storage.set', {
         key: rawKey,
-        value: value
+        value: value,
+        v: '5.103'
       });
     } catch (err) {
       console.log(err);
