@@ -759,7 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const limits = {
         'k': 1000
       };
-      const rls = new _rlstorage.RateLimitedStorage(limits, new Hardware(session));
+      const rls = new _rlstorage.RateLimitedStorage(limits, new _rlstorage.Hardware(session));
 
       for (let i = 0; i < 1100; ++i) {
         console.log(`i=${i}...`);
