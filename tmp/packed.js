@@ -20860,7 +20860,7 @@ class Hardware {
   }
 
   canWrite(value) {
-    return value.length <= 4096;
+    return value.length <= 1024;
   }
 
   async write(rawKey, value) {
