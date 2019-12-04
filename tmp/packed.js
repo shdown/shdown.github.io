@@ -759,11 +759,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const limits = {
         'k': 1000
       };
-      const rls = new _rlstorage.RateLimitedStorage(limits, new _rlstorage.Hardware(session));
+      const rls = new _rlstorage.RateLimitedStorage(limits, session);
 
       for (let i = 0; i < 1100; ++i) {
         console.log(`i=${i}...`);
         await rls.write('k', ['1']);
+        if (rls.hasSomethingToFlush()) console.log('!!!!!!!!!!! not flushed !!!!!!!!!!!!!!!!!');
       }
     };
 
@@ -20799,22 +20800,7 @@ exports.ProgressPainter = ProgressPainter;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.RateLimitedStorage = exports.Hardware = void 0;
-
-const _parseRawKeys = rawKeys => {
-  const result = {};
-
-  for (const rawKey of rawKeys) {
-    const m = rawKey.match(/^([^0-9]+)([0-9]+)$/);
-    if (m === null) continue;
-    const key = m[1];
-    const index = parseInt(m[2]);
-    const oldIndex = result[key];
-    if (oldIndex === undefined || oldIndex < index) result[key] = index;
-  }
-
-  return result;
-};
+exports.RateLimitedStorage = void 0;
 
 class HardwareRateLimitError extends Error {
   constructor() {
@@ -20844,6 +20830,7 @@ class Hardware {
   }
 
   async readMany(rawKeys) {
+    if (rawKeys.length === 0) return [];
     const rawKeyToIndex = {};
 
     for (let i = 0; i < rawKeys.length; ++i) rawKeyToIndex[rawKeys[i]] = i;
@@ -20869,16 +20856,21 @@ class Hardware {
         key: rawKey,
         value: value,
         v: '5.103'
+      },
+      /*raw=*/
+      false,
+      /*forwardErrors=*/
+      {
+        9: true
       });
     } catch (err) {
-      console.log(err);
+      if (!(err instanceof VkApiError)) throw err;
+      if (err.code !== 9) throw err;
       throw new HardwareRateLimitError();
     }
   }
 
 }
-
-exports.Hardware = Hardware;
 
 class Cache {
   constructor(hardware) {
@@ -20887,17 +20879,43 @@ class Cache {
     this._rawKeysToData = {};
     this._keyToCurIndex = null;
     this._keyToLastIndex = null;
+    this._timer = null;
   }
 
   async fetchKeysIfNeeded() {
-    if (this._keyToCurIndex !== null && this._keyToLastIndex !== null) return;
+    if (this._keyToCurIndex !== null && this._keyToLastIndex !== null && this._timer !== null) return;
+    const rawKeys = await this._hardware.readKeys();
+    const values = await this._hardware.readMany(rawKeys);
+    this._keyToCurIndex = {};
+    this._keyToLastIndex = {};
+    this._timer = 0;
+    const keyToMaxTimer = {};
 
-    const lastIndices = _parseRawKeys((await this._hardware.readKeys()));
+    for (let i = 0; i < rawKeys.length; ++i) {
+      const rawKey = rawKeys[i];
+      const value = values[i];
+      let m = rawKey.match(/^([^0-9]+)([0-9]+)$/);
+      if (m === null) continue;
+      const key = m[1];
+      const index = parseInt(m[2]);
+      m = value.match(/^([0-9]+);.*$/);
+      if (m === null) continue;
+      const timer = parseInt(m[1]);
+      const oldMaxTimer = keyToMaxTimer[key];
 
-    this._keyToCurIndex = { ...lastIndices
-    };
-    this._keyToLastIndex = { ...lastIndices
-    };
+      if (oldMaxTimer === undefined || oldMaxTimer < timer) {
+        this._keyToCurIndex[key] = index;
+        keyToMaxTimer[key] = timer;
+      }
+
+      const oldLast = this._keyToLastIndex[key];
+      if (oldLast === undefined || oldLast < index) this._keyToLastIndex[key] = index;
+      if (this._timer < timer) this._timer = timer;
+    }
+  }
+
+  tick() {
+    return ++this._timer;
   }
 
   canWrite(value) {
@@ -20981,9 +20999,9 @@ class Cache {
 }
 
 class RateLimitedStorage {
-  constructor(perKeyLimits, hardware) {
+  constructor(perKeyLimits, session) {
     this._perKeyLimits = perKeyLimits;
-    this._cache = new Cache(hardware);
+    this._cache = new Cache(new Hardware(session));
   }
 
   _chomp(prefix, data) {
@@ -21008,7 +21026,7 @@ class RateLimitedStorage {
 
     if (index === undefined) {
       index = 0;
-      prefix = '';
+      prefix = String(this._cache.tick()) + ';';
     } else {
       prefix = (await this._cache.read(key, index)) + ';';
     }
@@ -21024,29 +21042,43 @@ class RateLimitedStorage {
       if (newValue !== null) this._cache.write(key, index, newValue);
       data = leftover;
       index = (index + 1) % limit;
-      prefix = '';
+      prefix = String(this._cache.tick()) + ';';
     }
   }
 
   async write(key, data) {
+    if (data.length === 0) return;
     await this._cache.fetchKeysIfNeeded();
     await this._scatter(key, data);
     await this._cache.flush();
   }
 
-  async read(key, callback) {
+  async read(key) {
     await this._cache.fetchKeysIfNeeded();
 
     const lastIndex = this._cache.getLastIndex(key);
 
     if (lastIndex === undefined) return;
+
+    const curIndex = this._cache.getCurIndex(key);
+
     const rawKeys = [];
 
-    for (let i = 0; i <= lastIndex; ++i) rawKeys.push(`${key}${i}`);
+    for (let i = 0; i <= lastIndex; ++i) {
+      const index = (curIndex + 1 + i) % (lastIndex + 1);
+      rawKeys.push(`${key}${index}`);
+    }
 
-    const chunks = await this._cache.readMany(rawKeys);
+    const result = [];
+    const values = await this._cache.readMany(rawKeys);
 
-    for (const chunk of chunks) for (const segment of chunk.split(';')) callback(segment);
+    for (const value of values) {
+      const segments = value.spit(';');
+
+      for (let i = 1; i < segments.length; ++i) result.push(segments[i]);
+    }
+
+    return result;
   }
 
   hasSomethingToFlush() {
@@ -21135,7 +21167,7 @@ const parseSearchString = search => {
 
   for (const segment of segments) {
     const [key, value] = segment.split('=',
-    /*limit*/
+    /*limit=*/
     2);
     if (value === undefined) continue;
     result[decodeURIComponent(key)] = decodeURIComponent(value);
@@ -21235,14 +21267,16 @@ class VkApiSession {
     return raw ? result : result.response;
   }
 
-  async apiRequest(method, params, raw = false) {
+  async apiRequest(method, params, raw = false, forwardErrors = undefined) {
     while (true) {
       try {
         return await this._apiRequestNoRateLimit(method, params, raw);
       } catch (err) {
-        if (!(err instanceof VkApiError)) throw err; // https://vk.com/dev/errors
+        if (!(err instanceof VkApiError)) throw err;
+        const code = err.code;
+        if (forwardErrors !== undefined && forwardErrors[code]) throw err; // https://vk.com/dev/errors
 
-        switch (err.code) {
+        switch (code) {
           case 6:
             await this._limitRate('rateLimit', 3000);
             break;
@@ -21266,7 +21300,7 @@ class VkApiSession {
 
   async apiExecuteRaw(params) {
     const result = await this.apiRequest('execute', params,
-    /*raw*/
+    /*raw=*/
     true);
     const errors = result.execute_errors || [];
     return {
@@ -21394,7 +21428,7 @@ class Transport {
     } catch (err) {
       if (!(err instanceof VkRequestError)) throw err;
 
-      if (err.data.error_type === 'client_error' && err.data.error_code === 1) {
+      if (err.data.error_type === 'client_error' && err.data.error_data.error_code === 1) {
         const reason = err.data.error_data.error_reason;
         throw new _vk_api.VkApiError(reason.error_code, reason.error_msg);
       } else {
