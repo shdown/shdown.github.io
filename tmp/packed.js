@@ -300,6 +300,7 @@ const gatherStatsBatch = async (config, batch, result) => {
       }
     }
 
+    if (earliestTimestamp === Infinity) continue;
     result[ownerId] = {
       timeSpan: latestTimestamp - earliestTimestamp,
       totalComments: totalComments
@@ -857,13 +858,17 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         infoFlush: async _ => {
           chartCtl.handleFlush();
-          const explicitNumerator = estimator.getDoneCommentsNumber();
+          const stats = estimator.getStats();
 
-          const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(estimator.getStats(), timeLimit);
+          if (stats !== undefined) {
+            const explicitNumerator = estimator.getDoneCommentsNumber();
 
-          const numerator = explicitNumerator + implicitNumerator;
-          const denominator = explicitDenominator + implicitDenominator;
-          progressPainter.setRatio(numerator / denominator);
+            const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats, timeLimit);
+
+            const numerator = explicitNumerator + implicitNumerator;
+            const denominator = explicitDenominator + implicitDenominator;
+            progressPainter.setRatio(numerator / denominator);
+          }
         },
         error: async datum => {
           const error = datum.error;
@@ -883,7 +888,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const commentsChecked = estimator.getDoneCommentsNumber();
       implicitNumerator += commentsChecked;
       implicitDenominator += commentsChecked;
-      await statsStorage.setStats(oid, estimator.getStats(),
+      const stats = estimator.getStats();
+      if (stats !== undefined) await statsStorage.setStats(oid, stats,
       /*isFake=*/
       false);
     }
@@ -20797,6 +20803,7 @@ class ProgressEstimator {
   }
 
   getStats() {
+    if (this._earliestTimestamp === Infinity) return undefined;
     return {
       timeSpan: this._latestTimestamp - this._earliestTimestamp,
       totalComments: this._totalTodo
