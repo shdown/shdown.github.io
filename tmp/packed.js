@@ -21130,7 +21130,7 @@ class RateLimitedStorage {
 
     const lastIndex = this._cache.getLastIndex(key);
 
-    if (lastIndex === undefined) return;
+    if (lastIndex === undefined) return [];
 
     const curIndex = this._cache.getCurIndex(key);
 
