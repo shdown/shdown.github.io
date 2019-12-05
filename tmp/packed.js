@@ -858,12 +858,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         infoFlush: async _ => {
           chartCtl.handleFlush();
-          const stats = estimator.getStats();
+          const currentStats = estimator.getStats();
 
-          if (stats !== undefined) {
+          if (currentStats !== undefined) {
             const explicitNumerator = estimator.getDoneCommentsNumber();
 
-            const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats, timeLimit);
+            const explicitDenominator = _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(currentStats, timeLimit);
 
             const numerator = explicitNumerator + implicitNumerator;
             const denominator = explicitDenominator + implicitDenominator;
@@ -888,8 +888,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const commentsChecked = estimator.getDoneCommentsNumber();
       implicitNumerator += commentsChecked;
       implicitDenominator += commentsChecked;
-      const stats = estimator.getStats();
-      if (stats !== undefined) await statsStorage.setStats(oid, stats,
+      const actualStats = estimator.getStats();
+      if (actualStats !== undefined) await statsStorage.setStats(oid, stats,
       /*isFake=*/
       false);
     }
