@@ -21189,9 +21189,10 @@ class StatsStorage {
   async _fetchDataIfNeeded() {
     if (this._data !== null) return;
     this._data = {};
+    const entries = await this._storage.read('s');
 
-    for (const datum of this._storage.read('s')) {
-      const [ownerId, totalComments, timeSpan] = (0, _intcodec.decodeManyIntegers)(datum);
+    for (const entry of entries) {
+      const [ownerId, totalComments, timeSpan] = (0, _intcodec.decodeManyIntegers)(entry);
       this._data[ownerId] = {
         totalComments: totalComments,
         timeSpan: timeSpan
@@ -21207,9 +21208,9 @@ class StatsStorage {
   async setStats(ownerId, stats, isFake) {
     await this._fetchDataIfNeeded();
     this._data[ownerId] = stats;
-    const value = (0, _intcodec.encodeManyIntegers)([ownerId, stats.totalComments, stats.timeSpan]);
+    const entry = (0, _intcodec.encodeManyIntegers)([ownerId, stats.totalComments, stats.timeSpan]);
 
-    this._storage.write('s', value);
+    this._storage.write('s', entry);
   }
 
   hasSomethingToFlush() {
