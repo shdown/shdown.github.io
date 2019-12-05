@@ -896,7 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     while (statsStorage.hasSomethingToFlush()) {
       workConfig.logText('Сохраняю результаты…');
-      await (0, _utils.sleepMillis)(1000);
+      await (0, _utils.sleepMillis)(200);
       await statsStorage.flush();
     }
 
@@ -21073,63 +21073,35 @@ class RateLimitedStorage {
   constructor(perKeyLimits, session) {
     this._perKeyLimits = perKeyLimits;
     this._cache = new Cache(new Hardware(session));
-    this._lastWriteTimestamp = -Infinity;
+    this._lastFlushTimestamp = -Infinity;
   }
 
-  _isWriteHarmless() {
-    const now = (0, _utils.monotonicNowMillis)();
-    if (now - this._lastWriteTimestamp < 3600) return false;
-    this._lastWriteTimestamp = now;
-    return true;
-  }
-
-  _chomp(prefix, data) {
-    for (let n = data.length; n > 0; --n) {
-      const newValue = prefix + data.slice(0, n).join(';');
-      if (this._cache.canWrite(newValue)) return {
-        newValue: newValue,
-        leftover: data.slice(n)
-      };
-    }
-
-    return {
-      newValue: null,
-      leftover: data
-    };
-  }
-
-  async _scatter(key, data) {
-    let index = this._cache.getCurIndex(key);
-
-    let prefix;
-
-    if (index === undefined) {
-      index = 0;
-      prefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
-    } else {
-      prefix = (await this._cache.read(key, index)) + ';';
-    }
-
+  async _writeToCache(key, value) {
     const limit = this._perKeyLimits[key];
 
-    while (data.length !== 0) {
-      const {
-        newValue,
-        leftover
-      } = this._chomp(prefix, data);
+    const index = this._cache.getCurIndex(key);
 
-      if (newValue !== null) this._cache.write(key, index, newValue);
-      data = leftover;
-      index = (index + 1) % limit;
-      prefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
+    if (index === undefined) {
+      const prefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
+
+      this._cache.write(key, 0, prefix + value);
+    } else {
+      const prefix = (await this._cache.read(key, index)) + ';';
+
+      if (this._cache.canWrite(prefix + value)) {
+        this._cache.write(key, index, prefix + value);
+      } else {
+        const newPrefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
+
+        this._cache.write(key, (index + 1) % limit, newPrefix + value);
+      }
     }
   }
 
-  async write(key, data) {
-    if (data.length === 0) return;
+  async write(key, value) {
     await this._cache.fetchKeysIfNeeded();
-    await this._scatter(key, data);
-    if (this._isWriteHarmless()) await this._flush();
+    await this._writeToCache(key, value);
+    return await this.flush();
   }
 
   async read(key) {
@@ -21170,7 +21142,15 @@ class RateLimitedStorage {
 
   async flush() {
     await this._cache.fetchKeysIfNeeded();
-    await this._cache.flush();
+    const now = (0, _utils.monotonicNowMillis)();
+
+    if (now - this._lastFlushTimestamp >= 3600) {
+      this._lastFlushTimestamp = now;
+      await this._cache.flush();
+      return true;
+    }
+
+    return false;
   }
 
 }
@@ -21216,8 +21196,7 @@ class StatsStorage {
     await this._fetchDataIfNeeded();
     this._data[ownerId] = stats;
     const entry = (0, _intcodec.encodeManyIntegers)([ownerId, stats.totalComments, stats.timeSpan]);
-
-    this._storage.write('s', entry);
+    await this._storage.write('s', entry);
   }
 
   hasSomethingToFlush() {
