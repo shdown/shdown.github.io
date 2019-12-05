@@ -25,10 +25,9 @@ class Reader {
     this._globalOffset = 0;
   }
 
-  _setEOF(reason) {
+  async _setEOF(reason) {
     if (!this._eof) {
-      this._config.callback('postDiscoveryStop', reason);
-
+      await this._config.callback('postDiscoveryStop', reason);
       this._eof = true;
     }
   }
@@ -48,8 +47,7 @@ class Reader {
       const isPinned = datum.is_pinned;
 
       if (datum.date < this._config.sinceTimestamp && !isPinned) {
-        this._setEOF('timeLimitReached');
-
+        await this._setEOF('timeLimitReached');
         break;
       }
 
@@ -66,24 +64,21 @@ class Reader {
 
       if (datum.from_id === this._config.uid) {
         // TODO pass the datum to the callback
-        this._config.callback('found', {
+        await this._config.callback('found', {
           postId: datum.id,
           offset: -1
         });
-
         value.offset = value.total;
       }
 
-      this._config.callback('infoAdd', value);
-
+      await this._config.callback('infoAdd', value);
       newCache.push(value);
     }
 
-    this._config.callback('infoFlush', null);
-
+    await this._config.callback('infoFlush', null);
     this._cache = newCache;
     this._cachePos = 0;
-    if (result.items.length < MAX_POSTS) this._setEOF('noNorePosts');
+    if (result.items.length < MAX_POSTS) await this._setEOF('noNorePosts');
     this._globalOffset += result.items.length;
   }
 
@@ -137,7 +132,7 @@ class HotGroup {
     return this._hotArray;
   }
 
-  decreaseCurrent(amountsById) {
+  async decreaseCurrent(amountsById) {
     const newHotArray = [];
 
     for (let i = 0; i < this._hotArray.length; ++i) {
@@ -153,14 +148,13 @@ class HotGroup {
           expellThis = true;
         }
 
-        this._config.callback('infoUpdate', value);
+        await this._config.callback('infoUpdate', value);
       }
 
       if (!expellThis) newHotArray.push(value);
     }
 
-    this._config.callback('infoFlush', null);
-
+    await this._config.callback('infoFlush', null);
     this._hotArray = newHotArray;
   }
 
@@ -224,7 +218,7 @@ const executeBatch = async (config, hotArray) => {
     const oldAmount = amountsById[datum.id] || 0;
 
     if (posterIds.indexOf(config.uid) !== -1) {
-      config.callback('found', {
+      await config.callback('found', {
         postId: datum.id,
         offset: datum.offset
       });
@@ -256,7 +250,7 @@ const findPosts = async config => {
         amountsById = await executeBatch(config, [firstValue]);
       } catch (err2) {
         if (!(err2 instanceof _vk_api.VkApiError)) throw err2;
-        config.callback('error', {
+        await config.callback('error', {
           postId: firstValue.id,
           error: err2
         }); // Let's just skip this one.
@@ -266,7 +260,7 @@ const findPosts = async config => {
       }
     }
 
-    hotGroup.decreaseCurrent(amountsById);
+    await hotGroup.decreaseCurrent(amountsById);
   }
 };
 
@@ -323,7 +317,7 @@ const gatherStats = async config => {
     const batch = oids.slice(offset, offset + batchSize);
     await gatherStatsBatch(config, batch, result);
     offset += batchSize;
-    config.callback('progress', {
+    await config.callback('progress', {
       numerator: (0, _utils.divCeil)(offset, MAX_REQUESTS_IN_EXECUTE),
       denominator: (0, _utils.divCeil)(oids.length, MAX_REQUESTS_IN_EXECUTE)
     });
@@ -334,7 +328,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":13,"./vk_api.js":14}],2:[function(require,module,exports){
+},{"./utils.js":14,"./vk_api.js":15}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -574,7 +568,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":13,"chart.js":7}],4:[function(require,module,exports){
+},{"./utils.js":14,"chart.js":8}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -609,12 +603,12 @@ var _utils = require("./utils.js");
 
 var _stats_storage = require("./stats_storage.js");
 
-var _rlstorage = require("./rlstorage.js");
+var _rate_limited_storage = require("./rate_limited_storage.js");
 
 const makeCallbackDispatcher = callbacks => {
-  return (what, arg) => {
+  return async (what, arg) => {
     const fn = callbacks[what];
-    if (fn === undefined) console.log(`No callback for "${what}": ${JSON.stringify(arg)}`);else fn(arg);
+    if (fn === undefined) console.log(`No callback for "${what}": ${JSON.stringify(arg)}`);else await fn(arg);
   };
 };
 
@@ -635,7 +629,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const body = document.getElementsByTagName('body')[0];
   const transport = new _vk_transport_connect.Transport();
   const session = new _vk_api.VkApiSession(transport);
-  const statsStorage = new _stats_storage.StatsStorage();
+  const storage = new _rate_limited_storage.RateLimitedStorage(
+  /*limits=*/
+  {
+    /*stats*/
+    s: 200,
+
+    /*timestamps*/
+    t: 400,
+
+    /*posts*/
+    p: 400
+  }, session);
+  const statsStorage = new _stats_storage.StatsStorage(storage);
 
   const getAccessToken = async scope => {
     const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
@@ -748,32 +754,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   };
 
-  const stressTestBtn = appendInputToForm({
-    type: 'button',
-    value: 'Стресс-тест'
-  });
-
-  stressTestBtn.onclick = () => {
-    const f = async () => {
-      await getAccessToken('');
-      const limits = {
-        'k': 1000
-      };
-      const rls = new _rlstorage.RateLimitedStorage(limits, session);
-
-      for (let i = 0; i < 1100; ++i) {
-        console.log(`i=${i}...`);
-        await rls.write('k', ['1']);
-        if (rls.hasSomethingToFlush()) console.log('!!!!!!!!!!! not flushed !!!!!!!!!!!!!!!!!');
-      }
-    };
-
-    f().then(() => {
-      console.log('Done');
-    });
-    return false;
-  };
-
   form.appendChild(document.createElement('hr'));
   const timeLimitInput = appendInputToForm({
     type: 'number',
@@ -787,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const oidsToGatherStats = [];
 
     for (const oid of oids) {
-      const stats = statsStorage.getStats(oid);
+      const stats = await statsStorage.getStats(oid);
       if (stats === undefined) oidsToGatherStats.push(oid);else result[oid] = stats;
     }
 
@@ -797,7 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
       session: session,
       ignorePinned: resolveConfig.ignorePinned,
       callback: makeCallbackDispatcher({
-        progress: datum => {
+        progress: async datum => {
           progressPainter.setRatio(datum.numerator / datum.denominator);
         }
       })
@@ -806,7 +786,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const oid in gatherResults) {
       const stats = gatherResults[oid];
-      statsStorage.setStats(oid, stats);
+      await statsStorage.setStats(oid, stats,
+      /*isFake=*/
+      true);
       result[oid] = stats;
     }
 
@@ -816,6 +798,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const work = async workConfig => {
     workConfig.logText('Получаю токен…');
     await getAccessToken('');
+    console.log('………');
+    await storage.clear();
+    console.log('!!!');
     session.setRateLimitCallback(reason => {
       workConfig.logText(`Умерим пыл (${reason})`);
     });
@@ -854,7 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chartPainter.reset();
       const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
       const callbacks = {
-        found: datum => {
+        found: async datum => {
           const link = `https://vk.com/wall${oid}_${datum.postId}`;
           result.push({
             link: link,
@@ -862,15 +847,15 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           workConfig.logText(`Найдено: ${link}`);
         },
-        infoAdd: datum => {
+        infoAdd: async datum => {
           chartCtl.handleAdd(datum);
           estimator.handleAdd(datum);
         },
-        infoUpdate: datum => {
+        infoUpdate: async datum => {
           chartCtl.handleUpdate(datum);
           estimator.handleUpdate(datum);
         },
-        infoFlush: _ => {
+        infoFlush: async _ => {
           chartCtl.handleFlush();
           const explicitNumerator = estimator.getDoneCommentsNumber();
 
@@ -880,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const denominator = explicitDenominator + implicitDenominator;
           progressPainter.setRatio(numerator / denominator);
         },
-        error: datum => {
+        error: async datum => {
           const error = datum.error;
           workConfig.logText(`Ошибка при проверке ${oid}_${datum.postId}: ${error.name}: ${error.message}`);
           console.log('error callback payload:');
@@ -898,7 +883,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const commentsChecked = estimator.getDoneCommentsNumber();
       implicitNumerator += commentsChecked;
       implicitDenominator += commentsChecked;
-      statsStorage.setStats(oid, estimator.getStats());
+      await statsStorage.setStats(oid, estimator.getStats(),
+      /*isFake=*/
+      false);
+    }
+
+    while (statsStorage.hasSomethingToFlush()) {
+      workConfig.logText('Сохраняю результаты…');
+      await (0, _utils.sleepMillis)(1000);
+      await statsStorage.flush();
     }
 
     return result;
@@ -962,12 +955,72 @@ document.addEventListener('DOMContentLoaded', () => {
   body.appendChild(form);
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":9,"./progress_painter.js":10,"./rlstorage.js":11,"./stats_storage.js":12,"./utils.js":13,"./vk_api.js":14,"./vk_transport_connect.js":15}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":10,"./progress_painter.js":11,"./rate_limited_storage.js":12,"./stats_storage.js":13,"./utils.js":14,"./vk_api.js":15,"./vk_transport_connect.js":16}],6:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.decodeManyIntegrs = exports.decodeInteger = exports.encodeManyIntegers = exports.encodeInteger = void 0;
+// "Codec" is for "co[der-]dec[oder]".
+const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_=';
+
+const encodeInteger = z => {
+  let result = '';
+
+  if (z < 0) {
+    result += '-';
+    z = -z;
+  }
+
+  while (z) {
+    const digit = z & 63;
+    result += CHARS[digit];
+    z -= digit;
+    z /= 64;
+  }
+
+  return result;
+};
+
+exports.encodeInteger = encodeInteger;
+
+const encodeManyIntegers = zs => zs.map(encodeInteger).join(',');
+
+exports.encodeManyIntegers = encodeManyIntegers;
+
+const decodeInteger = s => {
+  let i = 0;
+  let negative = false;
+
+  if (i < s.length && s[i] === '-') {
+    negative = true;
+    ++i;
+  }
+
+  let z = 0;
+
+  for (let shift = 1; i < s.length; ++i, shift *= 64) {
+    const digit = CHARS.indexOf(s[i]);
+    if (digit === -1) return NaN;
+    z += digit * shift;
+  }
+
+  return negative ? -z : z;
+};
+
+exports.decodeInteger = decodeInteger;
+
+const decodeManyIntegrs = s => s.split(',').map(decodeInteger);
+
+exports.decodeManyIntegrs = decodeManyIntegrs;
+
+},{}],7:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -16101,7 +16154,7 @@ document.addEventListener('DOMContentLoaded', () => {
   return src;
 });
 
-},{"moment":8}],8:[function(require,module,exports){
+},{"moment":9}],9:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -20705,7 +20758,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })));
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20762,7 +20815,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20794,13 +20847,19 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.RateLimitedStorage = void 0;
+
+var _vk_api = require("./vk_api.js");
+
+var _utils = require("./utils.js");
+
+var _intcodec = require("./intcodec.js");
 
 class HardwareRateLimitError extends Error {
   constructor() {
@@ -20864,7 +20923,7 @@ class Hardware {
         9: true
       });
     } catch (err) {
-      if (!(err instanceof VkApiError)) throw err;
+      if (!(err instanceof _vk_api.VkApiError)) throw err;
       if (err.code !== 9) throw err;
       throw new HardwareRateLimitError();
     }
@@ -20894,13 +20953,12 @@ class Cache {
     for (let i = 0; i < rawKeys.length; ++i) {
       const rawKey = rawKeys[i];
       const value = values[i];
-      let m = rawKey.match(/^([^0-9]+)([0-9]+)$/);
-      if (m === null) continue;
+      let m;
+      if ((m = rawKey.match(/^([^0-9]+)([0-9]+)$/)) === null) continue;
       const key = m[1];
       const index = parseInt(m[2]);
-      m = value.match(/^([0-9]+);.*$/);
-      if (m === null) continue;
-      const timer = parseInt(m[1]);
+      if ((m = value.match(/^([^;]*);.*$/)) === null) continue;
+      const timer = (0, _intcodec.decodeInteger)(m[1]);
       const oldMaxTimer = keyToMaxTimer[key];
 
       if (oldMaxTimer === undefined || oldMaxTimer < timer) {
@@ -20947,6 +21005,12 @@ class Cache {
 
     if (result.length === rawKeys.length) return result;
     return await this._hardware.readMany(rawKeys);
+  }
+
+  async clear() {
+    const rawKeys = await this._hardware.readKeys();
+
+    for (const rawKey of rawKeys) await this._hardware.write(rawKey, '');
   }
 
   write(key, index, value) {
@@ -21002,6 +21066,14 @@ class RateLimitedStorage {
   constructor(perKeyLimits, session) {
     this._perKeyLimits = perKeyLimits;
     this._cache = new Cache(new Hardware(session));
+    this._lastWriteTimestamp = -Infinity;
+  }
+
+  _isWriteHarmless() {
+    const now = (0, _utils.monotonicNowMillis)();
+    if (now - this._lastWriteTimestamp < 3600) return false;
+    this._lastWriteTimestamp = now;
+    return true;
   }
 
   _chomp(prefix, data) {
@@ -21026,7 +21098,7 @@ class RateLimitedStorage {
 
     if (index === undefined) {
       index = 0;
-      prefix = String(this._cache.tick()) + ';';
+      prefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
     } else {
       prefix = (await this._cache.read(key, index)) + ';';
     }
@@ -21042,7 +21114,7 @@ class RateLimitedStorage {
       if (newValue !== null) this._cache.write(key, index, newValue);
       data = leftover;
       index = (index + 1) % limit;
-      prefix = String(this._cache.tick()) + ';';
+      prefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
     }
   }
 
@@ -21050,7 +21122,7 @@ class RateLimitedStorage {
     if (data.length === 0) return;
     await this._cache.fetchKeysIfNeeded();
     await this._scatter(key, data);
-    await this._cache.flush();
+    if (this._isWriteHarmless()) await this._flush();
   }
 
   async read(key) {
@@ -21081,6 +21153,10 @@ class RateLimitedStorage {
     return result;
   }
 
+  async clear() {
+    await this._cache.clear();
+  }
+
   hasSomethingToFlush() {
     return this._cache.hasSomethingToFlush();
   }
@@ -21094,7 +21170,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{}],12:[function(require,module,exports){
+},{"./intcodec.js":6,"./utils.js":14,"./vk_api.js":15}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21102,20 +21178,53 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.StatsStorage = void 0;
 
-class StatsStorage {
-  constructor() {}
+var _intcodec = require("./intcodec.js");
 
-  getStats(ownerId) {
-    return undefined;
+class StatsStorage {
+  constructor(storage) {
+    this._storage = storage;
+    this._data = null;
   }
 
-  setStats(ownerId, stats) {}
+  async _fetchDataIfNeeded() {
+    if (this._data !== null) return;
+    this._data = {};
+
+    for (const datum of this._storage.read('s')) {
+      const [ownerId, totalComments, timeSpan] = (0, _intcodec.decodeManyIntegers)(datum);
+      this._data[ownerId] = {
+        totalComments: totalComments,
+        timeSpan: timeSpan
+      };
+    }
+  }
+
+  async getStats(ownerId) {
+    await this._fetchDataIfNeeded();
+    return this._data[ownerId];
+  }
+
+  async setStats(ownerId, stats, isFake) {
+    await this._fetchDataIfNeeded();
+    this._data[ownerId] = stats;
+    const value = (0, _intcodec.encodeManyIntegers)([ownerId, stats.totalComments, stats.timeSpan]);
+
+    this._storage.write('s', value);
+  }
+
+  hasSomethingToFlush() {
+    return this._storage.hasSomethingToFlush();
+  }
+
+  async flush() {
+    await this._storage.flush();
+  }
 
 }
 
 exports.StatsStorage = StatsStorage;
 
-},{}],13:[function(require,module,exports){
+},{"./intcodec.js":6}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21178,7 +21287,7 @@ const parseSearchString = search => {
 
 exports.parseSearchString = parseSearchString;
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21313,7 +21422,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":13}],15:[function(require,module,exports){
+},{"./utils.js":14}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21444,4 +21553,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":14,"@vkontakte/vk-connect":6}]},{},[5]);
+},{"./vk_api.js":15,"@vkontakte/vk-connect":7}]},{},[5]);
