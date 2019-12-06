@@ -1017,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.decodeManyIntegrs = exports.decodeInteger = exports.encodeManyIntegers = exports.encodeInteger = void 0;
+exports.decodeManyIntegers = exports.decodeInteger = exports.encodeManyIntegers = exports.encodeInteger = void 0;
 // "Codec" is for "co[der-]dec[oder]".
 const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_=';
 
@@ -1068,9 +1068,9 @@ const decodeInteger = s => {
 
 exports.decodeInteger = decodeInteger;
 
-const decodeManyIntegrs = s => s.split(',').map(decodeInteger);
+const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 
-exports.decodeManyIntegrs = decodeManyIntegrs;
+exports.decodeManyIntegers = decodeManyIntegers;
 
 },{}],7:[function(require,module,exports){
 (function (global){
