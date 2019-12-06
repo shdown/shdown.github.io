@@ -892,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
       implicitNumerator += commentsChecked;
       implicitDenominator += commentsChecked;
       const actualStats = estimator.getStats();
-      if (actualStats !== undefined) await statsStorage.setStats(parseInt(oid), stats,
+      if (actualStats !== undefined) await statsStorage.setStats(parseInt(oid), actualStats,
       /*isApprox=*/
       false);
     }
