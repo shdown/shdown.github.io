@@ -329,7 +329,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":14,"./vk_api.js":15}],2:[function(require,module,exports){
+},{"./utils.js":15,"./vk_api.js":16}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -569,7 +569,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":14,"chart.js":8}],4:[function(require,module,exports){
+},{"./utils.js":15,"chart.js":8}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -604,6 +604,8 @@ var _utils = require("./utils.js");
 
 var _stats_storage = require("./stats_storage.js");
 
+var _posts_storage = require("./posts_storage.js");
+
 var _rate_limited_storage = require("./rate_limited_storage.js");
 
 const makeCallbackDispatcher = callbacks => {
@@ -634,15 +636,13 @@ document.addEventListener('DOMContentLoaded', () => {
   /*limits=*/
   {
     /*stats*/
-    s: 200,
-
-    /*timestamps*/
-    t: 400,
+    s: 400,
 
     /*posts*/
-    p: 400
+    p: 600
   }, session);
   const statsStorage = new _stats_storage.StatsStorage(storage);
+  const postsStorage = new _posts_storage.PostsStorage(storage);
 
   const getAccessToken = async scope => {
     const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
@@ -683,6 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const resultDiv = document.createElement('div');
   const workingDiv = document.createElement('div');
+  const archiveDiv = document.createElement('div');
   const workingText = document.createElement('div');
   workingText.innerHTML = '…';
   const progressPainter = new _progress_painter.ProgressPainter();
@@ -788,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const oid in gatherResults) {
       const stats = gatherResults[oid];
       await statsStorage.setStats(oid, stats,
-      /*isFake=*/
+      /*isApprox=*/
       true);
       result[oid] = stats;
     }
@@ -799,9 +800,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const work = async workConfig => {
     workConfig.logText('Получаю токен…');
     await getAccessToken('');
-    console.log('………');
-    await storage.clear();
-    console.log('!!!');
     session.setRateLimitCallback(reason => {
       workConfig.logText(`Умерим пыл (${reason})`);
     });
@@ -842,6 +840,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const callbacks = {
         found: async datum => {
           const link = `https://vk.com/wall${oid}_${datum.postId}`;
+          await postsStorage.addPost(oid, {
+            ownerId: oid,
+            postId: datum.postId,
+            commentId: -1
+          });
           result.push({
             link: link,
             offset: datum.offset
@@ -890,7 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
       implicitDenominator += commentsChecked;
       const actualStats = estimator.getStats();
       if (actualStats !== undefined) await statsStorage.setStats(oid, stats,
-      /*isFake=*/
+      /*isApprox=*/
       false);
     }
 
@@ -907,6 +910,52 @@ document.addEventListener('DOMContentLoaded', () => {
   appendInputToForm({
     type: 'submit'
   });
+  form.appendChild(document.createElement('hr'));
+  const archiveBtn = appendInputToForm({
+    type: 'button',
+    value: 'Архив'
+  });
+
+  archiveBtn.onclick = () => {
+    form.remove();
+    body.appendChild(archiveDiv);
+
+    const fn = async () => {
+      const waitingText = document.createElement('div');
+      waitingText.innerHTML = (0, _utils.htmlEscape)('Загружаю…');
+      archiveDiv.appendChild(waitingText);
+      const userIds = await postsStorage.getUsers();
+
+      for (const userId of userIds) {
+        const ul = document.createElement('ul');
+
+        for (const datum of await postsStorage.getUserPosts(userId)) {
+          const a = document.createElement('a');
+          const link = `https://vk.com/wall${datum.ownerId}_${datum.postId}`;
+          a.setAttribute('href', link);
+          a.setAttribute('rel', 'noopener noreferrer');
+          a.setAttribute('target', '_blank');
+          a.innerHTML = (0, _utils.htmlEscape)(link);
+          const li = document.createElement('li');
+          li.appendChild(a);
+          ul.appendChild(li);
+        }
+
+        archiveDiv.append(`id${userId}:`);
+        archiveDiv.appendChild(ul);
+      }
+
+      waitingText.remove();
+
+      if (userIds.length === 0) {
+        archiveDiv.append('Архив пуст.');
+      }
+    };
+
+    fn().then(() => {});
+    return false;
+  };
+
   form.appendChild(document.createElement('hr'));
   form.appendChild(formLog);
 
@@ -961,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
   body.appendChild(form);
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./progress_estimator.js":10,"./progress_painter.js":11,"./rate_limited_storage.js":12,"./stats_storage.js":13,"./utils.js":14,"./vk_api.js":15,"./vk_transport_connect.js":16}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./posts_storage.js":10,"./progress_estimator.js":11,"./progress_painter.js":12,"./rate_limited_storage.js":13,"./stats_storage.js":14,"./utils.js":15,"./vk_api.js":16,"./vk_transport_connect.js":17}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -972,6 +1021,7 @@ exports.decodeManyIntegrs = exports.decodeInteger = exports.encodeManyIntegers =
 const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_=';
 
 const encodeInteger = z => {
+  if (!Number.isSafeInteger(z)) throw new Error(`${z} is not a safe integer`);
   let result = '';
 
   if (z < 0) {
@@ -20765,6 +20815,70 @@ exports.decodeManyIntegrs = decodeManyIntegrs;
 })));
 
 },{}],10:[function(require,module,exports){
+class PostsStorage {
+    constructor(storage) {
+        this._storage = storage;
+        this._data = null;
+    }
+
+    async _fetchDataIfNeeded() {
+        if (this._data !== null)
+            return;
+        this._data = new Map();
+        const entries = await this._storage.read('p');
+        for (const entry of entries) {
+            const [userId, ownerId, postId, commentId] = decodeManyIntegers(entry);
+
+            let set = this._data.get(userId);
+            if (set === undefined) {
+                set = new Set();
+                this._data.set(userId, set);
+            }
+
+            set.add(`${ownerId},${postId},${commentId}`);
+        }
+    }
+
+    async getUsers() {
+        await this._fetchDataIfNeeded();
+        return [...this._data.keys()];
+    }
+
+    async getUserPosts(userId) {
+        await this._fetchDataIfNeeded();
+        const set = this._data.get(userId);
+        if (set === undefined)
+            return [];
+
+        const result = [];
+        for (const setValue of set) {
+            const [ownerId, postId, commentId] = setValue.split(',').map(x => parseInt(x));
+            result.push({ownerId: ownerId, postId: postId, commentId: commentId});
+        }
+        return result;
+    }
+
+    async addPost(userId, datum) {
+        await this._fetchDataIfNeeded();
+
+        const setValue = `${datum.ownerId},${datum.postId},${datum.commentId}`;
+        let set = this._data.get(userId);
+        if (set === undefined) {
+            set = new Set();
+            this._data.set(userId, set);
+        } else {
+            if (set.has(setValue))
+                return false;
+        }
+        set.add(setValue);
+
+        const entry = encodeManyIntegers([userId, datum.ownerId, datum.postId, datum.commentId]);
+        await this._storage.write('p', entry);
+        return true;
+    }
+}
+
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20822,7 +20936,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20854,7 +20968,7 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21012,9 +21126,10 @@ class Cache {
 
     if (result.length === rawKeys.length) return result;
     return await this._hardware.readMany(rawKeys);
-  }
+  } // Use for debugging only: does not catch rate limit errors and stuff.
 
-  async clear() {
+
+  async unsafeClear() {
     const rawKeys = await this._hardware.readKeys();
 
     for (const rawKey of rawKeys) await this._hardware.write(rawKey, '');
@@ -21061,6 +21176,8 @@ class Cache {
     }
 
     this._data.splice(0, i);
+
+    return i;
   }
 
   hasSomethingToFlush() {
@@ -21130,10 +21247,11 @@ class RateLimitedStorage {
     }
 
     return result;
-  }
+  } // Use for debugging only: does not catch rate limit errors and stuff.
 
-  async clear() {
-    await this._cache.clear();
+
+  async unsafeClear() {
+    await this._cache.unsafeClear();
   }
 
   hasSomethingToFlush() {
@@ -21145,8 +21263,8 @@ class RateLimitedStorage {
     const now = (0, _utils.monotonicNowMillis)();
 
     if (now - this._lastFlushTimestamp >= 3600) {
-      this._lastFlushTimestamp = now;
-      await this._cache.flush();
+      const nwrites = await this._cache.flush();
+      if (nwrites) this._lastFlushTimestamp = (0, _utils.monotonicNowMillis)() + (nwrites - 1) * 3600 / 2;
       return true;
     }
 
@@ -21157,7 +21275,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":6,"./utils.js":14,"./vk_api.js":15}],13:[function(require,module,exports){
+},{"./intcodec.js":6,"./utils.js":15,"./vk_api.js":16}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21192,7 +21310,7 @@ class StatsStorage {
     return this._data[ownerId];
   }
 
-  async setStats(ownerId, stats, isFake) {
+  async setStats(ownerId, stats, isApprox) {
     await this._fetchDataIfNeeded();
     this._data[ownerId] = stats;
     const entry = (0, _intcodec.encodeManyIntegers)([ownerId, stats.totalComments, stats.timeSpan]);
@@ -21211,7 +21329,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":6}],14:[function(require,module,exports){
+},{"./intcodec.js":6}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21274,7 +21392,7 @@ const parseSearchString = search => {
 
 exports.parseSearchString = parseSearchString;
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21409,7 +21527,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":14}],16:[function(require,module,exports){
+},{"./utils.js":15}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21540,4 +21658,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":15,"@vkontakte/vk-connect":7}]},{},[5]);
+},{"./vk_api.js":16,"@vkontakte/vk-connect":7}]},{},[5]);
