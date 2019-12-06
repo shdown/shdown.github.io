@@ -924,6 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const waitingText = document.createElement('div');
       waitingText.innerHTML = (0, _utils.htmlEscape)('Загружаю…');
       archiveDiv.appendChild(waitingText);
+      await getAccessToken('');
       const userIds = await postsStorage.getUsers();
 
       for (const userId of userIds) {
