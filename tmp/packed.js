@@ -21263,7 +21263,7 @@ class RateLimitedStorage {
     const values = await this._cache.readMany(rawKeys);
 
     for (const value of values) {
-      const segments = value.spit(';');
+      const segments = value.split(';');
 
       for (let i = 1; i < segments.length; ++i) result.push(segments[i]);
     }
