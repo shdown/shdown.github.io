@@ -711,6 +711,54 @@ document.addEventListener('DOMContentLoaded', () => {
     return elem;
   };
 
+  const showArchive = async () => {
+    form.remove();
+    body.appendChild(archiveDiv);
+    const waitingText = document.createElement('div');
+    waitingText.innerHTML = (0, _utils.htmlEscape)('Загрузка архива…');
+    archiveDiv.appendChild(waitingText);
+    await getAccessToken('');
+    const userIds = await postsStorage.getUsers();
+
+    for (const userId of userIds) {
+      const ul = document.createElement('ul');
+
+      for (const datum of await postsStorage.getUserPosts(userId)) {
+        const a = document.createElement('a');
+        const link = `https://vk.com/wall${datum.ownerId}_${datum.postId}`;
+        a.setAttribute('href', link);
+        a.setAttribute('rel', 'noopener noreferrer');
+        a.setAttribute('target', '_blank');
+        a.innerHTML = (0, _utils.htmlEscape)(link);
+        const li = document.createElement('li');
+        li.appendChild(a);
+        ul.appendChild(li);
+      }
+
+      archiveDiv.append(`ID ${userId}:`);
+      archiveDiv.appendChild(ul);
+    }
+
+    waitingText.remove();
+
+    if (userIds.length === 0) {
+      archiveDiv.append('Архив пуст.');
+    }
+  };
+
+  const archiveBtn = appendInputToForm({
+    type: 'button',
+    value: 'Архив'
+  });
+
+  archiveBtn.onclick = () => {
+    showArchive().then(() => {}).catch(err => {
+      formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
+    });
+    return false;
+  };
+
+  form.appendChild(document.createElement('hr'));
   const userIdInput = appendInputToForm({
     type: 'text',
     label: 'ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):',
@@ -910,53 +958,6 @@ document.addEventListener('DOMContentLoaded', () => {
   appendInputToForm({
     type: 'submit'
   });
-  form.appendChild(document.createElement('hr'));
-  const archiveBtn = appendInputToForm({
-    type: 'button',
-    value: 'Архив'
-  });
-
-  archiveBtn.onclick = () => {
-    form.remove();
-    body.appendChild(archiveDiv);
-
-    const fn = async () => {
-      const waitingText = document.createElement('div');
-      waitingText.innerHTML = (0, _utils.htmlEscape)('Загружаю…');
-      archiveDiv.appendChild(waitingText);
-      await getAccessToken('');
-      const userIds = await postsStorage.getUsers();
-
-      for (const userId of userIds) {
-        const ul = document.createElement('ul');
-
-        for (const datum of await postsStorage.getUserPosts(userId)) {
-          const a = document.createElement('a');
-          const link = `https://vk.com/wall${datum.ownerId}_${datum.postId}`;
-          a.setAttribute('href', link);
-          a.setAttribute('rel', 'noopener noreferrer');
-          a.setAttribute('target', '_blank');
-          a.innerHTML = (0, _utils.htmlEscape)(link);
-          const li = document.createElement('li');
-          li.appendChild(a);
-          ul.appendChild(li);
-        }
-
-        archiveDiv.append(`id${userId}:`);
-        archiveDiv.appendChild(ul);
-      }
-
-      waitingText.remove();
-
-      if (userIds.length === 0) {
-        archiveDiv.append('Архив пуст.');
-      }
-    };
-
-    fn().then(() => {});
-    return false;
-  };
-
   form.appendChild(document.createElement('hr'));
   form.appendChild(formLog);
 
@@ -21048,8 +21049,8 @@ class Hardware {
     return result;
   }
 
-  canWrite(value) {
-    return value.length <= 1024;
+  canWrite(prefix, value) {
+    return prefix.length + value.length <= 1024;
   }
 
   async write(rawKey, value) {
@@ -21119,8 +21120,8 @@ class Cache {
     return ++this._timer;
   }
 
-  canWrite(value) {
-    return this._hardware.canWrite(value);
+  canWrite(prefix, value) {
+    return this._hardware.canWrite(prefix, value);
   }
 
   getCurIndex(key) {
@@ -21227,7 +21228,7 @@ class RateLimitedStorage {
     } else {
       const prefix = (await this._cache.read(key, index)) + ';';
 
-      if (this._cache.canWrite(prefix + value)) {
+      if (this._cache.canWrite(prefix, value)) {
         this._cache.write(key, index, prefix + value);
       } else {
         const newPrefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
