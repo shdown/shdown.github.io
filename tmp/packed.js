@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const oid in gatherResults) {
       const stats = gatherResults[oid];
-      await statsStorage.setStats(oid, stats,
+      await statsStorage.setStats(parseInt(oid), stats,
       /*isApprox=*/
       true);
       result[oid] = stats;
@@ -892,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
       implicitNumerator += commentsChecked;
       implicitDenominator += commentsChecked;
       const actualStats = estimator.getStats();
-      if (actualStats !== undefined) await statsStorage.setStats(oid, stats,
+      if (actualStats !== undefined) await statsStorage.setStats(parseInt(oid), stats,
       /*isApprox=*/
       false);
     }
