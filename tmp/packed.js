@@ -818,6 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const oid of oids) {
       const stats = await statsStorage.getStats(oid);
+      console.log(`In-storage stats: ${oid} => ${JSON.stringify(stats)}`);
       if (stats === undefined) oidsToGatherStats.push(oid);else result[oid] = stats;
     }
 
@@ -945,10 +946,10 @@ document.addEventListener('DOMContentLoaded', () => {
       false);
     }
 
-    while (statsStorage.hasSomethingToFlush()) {
+    while (storage.hasSomethingToFlush()) {
       workConfig.logText('Сохраняю результаты…');
       await (0, _utils.sleepMillis)(200);
-      await statsStorage.flush();
+      await storage.flush();
     }
 
     return result;
@@ -21406,14 +21407,6 @@ class StatsStorage {
     this._data[ownerId] = stats;
     const entry = (0, _intcodec.encodeManyIntegers)([ownerId, stats.totalComments, stats.timeSpan]);
     await this._storage.write('s', entry);
-  }
-
-  hasSomethingToFlush() {
-    return this._storage.hasSomethingToFlush();
-  }
-
-  async flush() {
-    await this._storage.flush();
   }
 
 }
