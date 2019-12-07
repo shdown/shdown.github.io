@@ -21025,13 +21025,6 @@ class Hardware {
     });
   }
 
-  async read(rawKey) {
-    return await this._session.apiRequest('storage.get', {
-      key: rawKey,
-      v: '5.103'
-    });
-  }
-
   async readMany(rawKeys) {
     if (rawKeys.length === 0) return [];
     const rawKeyToIndex = {};
@@ -21075,11 +21068,119 @@ class Hardware {
 
 }
 
+const READ_CACHE_SIZE = 32;
+
+const hashString = str => {
+  let hash = 5381;
+
+  for (let i = str.length; i; hash = hash * 33 ^ str.charCodeAt(--i)) {}
+
+  return hash >>> 0;
+};
+
 class Cache {
   constructor(hardware) {
-    this._data = [];
     this._hardware = hardware;
-    this._rawKeysToData = {};
+    this._writeCache = [];
+    this._rawKeyToWriteDatum = {};
+    this._readCache = Array(READ_CACHE_SIZE).fill(null);
+  }
+
+  async readMany(rawKeys) {
+    const result = Array(rawKeys.length).fill(null);
+    const toFetchRawKeys = [];
+    const toFetchResultIndices = [];
+    const toFetchCacheIndices = [];
+
+    for (let i = 0; i < rawKeys.length; ++i) {
+      const rawKey = rawKeys[i];
+      const writeDatum = this._rawKeyToWriteDatum[rawKey];
+
+      if (writeDatum !== undefined) {
+        result[i] = writeDatum.value;
+        continue;
+      }
+
+      const cacheIndex = hashString(rawKey) & READ_CACHE_SIZE - 1;
+      const readDatum = this._readCache[cacheIndex];
+
+      if (readDatum !== null && readDatum.rawKey === rawKey) {
+        result[i] = readDatum.value;
+        continue;
+      }
+
+      toFetchRawKeys.push(rawKey);
+      toFetchResultIndices.push(i);
+      toFetchCacheIndices.push(cacheIndex);
+    }
+
+    const fetched = await this._hardware.readMany(toFetchRawKeys);
+
+    for (let i = 0; i < fetched.length; ++i) {
+      const value = fetched[i];
+      result[toFetchResultIndices[i]] = value;
+      this._readCache[toFetchCacheIndices[i]] = {
+        rawKey: toFetchRawKeys[i],
+        value: value
+      };
+    }
+
+    return result;
+  }
+
+  write(rawKey, value) {
+    const writeDatum = this._rawKeyToWriteDatum[rawKey];
+
+    if (writeDatum !== undefined) {
+      writeDatum.value = value;
+      return;
+    }
+
+    const datum = {
+      rawKey: rawKey,
+      value: value
+    };
+
+    this._writeCache.push(datum);
+
+    this._rawKeyToWriteDatum[rawKey] = datum;
+    const cacheIndex = hashString(rawKey) & READ_CACHE_SIZE - 1;
+    this._readCache[cacheIndex] = datum;
+  }
+
+  async flush() {
+    let i = 0;
+
+    for (; i < this._writeCache.length; ++i) {
+      const datum = this._writeCache[i];
+
+      try {
+        await this._hardware.write(datum.rawKey, datum.value);
+      } catch (err) {
+        if (!(err instanceof HardwareRateLimitError)) throw err;
+        break;
+      }
+
+      delete this._rawKeyToWriteDatum[datum.rawKey];
+    }
+
+    this._writeCache.splice(0, i);
+
+    return i;
+  }
+
+  hasSomethingToFlush() {
+    return this._writeCache.length !== 0;
+  }
+
+}
+
+class RateLimitedStorage {
+  constructor(perKeyLimits, session) {
+    this._perKeyLimits = perKeyLimits;
+    this._hardware = new Hardware(session);
+    this._cache = new Cache(this._hardware);
+    this._lastFlushTimestamp = -Infinity;
     this._keyToCurIndex = null;
     this._keyToLastIndex = null;
     this._timer = null;
@@ -21116,143 +21217,47 @@ class Cache {
     }
   }
 
-  tick() {
+  _tick() {
     return ++this._timer;
   }
 
-  canWrite(prefix, value) {
-    return this._hardware.canWrite(prefix, value);
-  }
-
-  getCurIndex(key) {
-    return this._keyToCurIndex[key];
-  }
-
-  getLastIndex(key) {
-    return this._keyToLastIndex[key];
-  }
-
-  async read(key, index) {
-    const rawKey = `${key}${index}`;
-    const datum = this._rawKeysToData[rawKey];
-    if (datum !== undefined) return datum.value;
-    return await this._hardware.read(rawKey);
-  }
-
-  async readMany(rawKeys) {
-    const result = [];
-
-    for (const rawKey of rawKeys) {
-      const datum = this._rawKeysToData[rawKey];
-      if (datum !== undefined) result.push(datum.value);
-    }
-
-    if (result.length === rawKeys.length) return result;
-    return await this._hardware.readMany(rawKeys);
-  } // Use for debugging only: does not catch rate limit errors and stuff.
-
-
-  async unsafeClear() {
-    const rawKeys = await this._hardware.readKeys();
-
-    for (const rawKey of rawKeys) await this._hardware.write(rawKey, '');
-  }
-
-  write(key, index, value) {
-    const rawKey = `${key}${index}`;
-    const datum = this._rawKeysToData[rawKey];
-
-    if (datum !== undefined) {
-      datum.value = value;
-    } else {
-      const newDatum = {
-        key: key,
-        index: index,
-        value: value
-      };
-
-      this._data.push(newDatum);
-
-      this._rawKeysToData[rawKey] = newDatum;
-    }
+  _writeUpdateIndices(key, index, value) {
+    this._cache.write(`${key}${index}`, value);
 
     this._keyToCurIndex[key] = index;
     const oldLast = this._keyToLastIndex[key];
     if (oldLast === undefined || oldLast < index) this._keyToLastIndex[key] = index;
   }
 
-  async flush() {
-    let i = 0;
-
-    for (; i < this._data.length; ++i) {
-      const datum = this._data[i];
-      const rawKey = `${datum.key}${datum.index}`;
-
-      try {
-        await this._hardware.write(rawKey, datum.value);
-      } catch (err) {
-        if (!(err instanceof HardwareRateLimitError)) throw err;
-        break;
-      }
-
-      delete this._rawKeysToData[rawKey];
-    }
-
-    this._data.splice(0, i);
-
-    return i;
-  }
-
-  hasSomethingToFlush() {
-    return this._data.length !== 0;
-  }
-
-}
-
-class RateLimitedStorage {
-  constructor(perKeyLimits, session) {
-    this._perKeyLimits = perKeyLimits;
-    this._cache = new Cache(new Hardware(session));
-    this._lastFlushTimestamp = -Infinity;
-  }
-
-  async _writeToCache(key, value) {
+  async write(key, value) {
+    await this._fetchKeysIfNeeded();
     const limit = this._perKeyLimits[key];
-
-    const index = this._cache.getCurIndex(key);
+    const index = this._keyToCurIndex[key];
 
     if (index === undefined) {
-      const prefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
+      const prefix = (0, _intcodec.encodeInteger)(this._tick()) + ';';
 
-      this._cache.write(key, 0, prefix + value);
+      this._writeUpdateIndices(key, 0, prefix + value);
     } else {
-      const prefix = (await this._cache.read(key, index)) + ';';
+      const prefix = (await this._cache.readMany([`${key}${index}`]))[0] + ';';
 
-      if (this._cache.canWrite(prefix, value)) {
-        this._cache.write(key, index, prefix + value);
+      if (this._hardware.canWrite(prefix, value)) {
+        this._writeUpdateIndices(key, index, prefix + value);
       } else {
-        const newPrefix = (0, _intcodec.encodeInteger)(this._cache.tick()) + ';';
+        const newPrefix = (0, _intcodec.encodeInteger)(this._tick()) + ';';
 
-        this._cache.write(key, (index + 1) % limit, newPrefix + value);
+        this._writeUpdateIndices(key, (index + 1) % limit, newPrefix + value);
       }
     }
-  }
 
-  async write(key, value) {
-    await this._cache.fetchKeysIfNeeded();
-    await this._writeToCache(key, value);
     return await this.flush();
   }
 
   async read(key) {
-    await this._cache.fetchKeysIfNeeded();
-
-    const lastIndex = this._cache.getLastIndex(key);
-
+    await this._fetchKeysIfNeeded();
+    const lastIndex = this._keyToLastIndex[key];
     if (lastIndex === undefined) return [];
-
-    const curIndex = this._cache.getCurIndex(key);
-
+    const curIndex = this._keyToCurIndex[key];
     const rawKeys = [];
 
     for (let i = 0; i <= lastIndex; ++i) {
@@ -21270,11 +21275,6 @@ class RateLimitedStorage {
     }
 
     return result;
-  } // Use for debugging only: does not catch rate limit errors and stuff.
-
-
-  async unsafeClear() {
-    await this._cache.unsafeClear();
   }
 
   hasSomethingToFlush() {
@@ -21282,7 +21282,6 @@ class RateLimitedStorage {
   }
 
   async flush() {
-    await this._cache.fetchKeysIfNeeded();
     const now = (0, _utils.monotonicNowMillis)();
 
     if (now - this._lastFlushTimestamp >= 3600) {
