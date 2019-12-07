@@ -767,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fn = async () => {
       await getAccessToken('');
       console.log('Clearing…');
-      await storage.clear();
+      await storage.clear('s');
 
       while (storage.hasSomethingToFlush()) {
         console.log('Sleeping…');
