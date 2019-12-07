@@ -21005,6 +21005,62 @@ var _utils = require("./utils.js");
 
 var _intcodec = require("./intcodec.js");
 
+// So, the basic problem is to store some data we want using the VK storage API, which is quite
+// cumbersome to use.
+//
+// What we have is the following functions:
+//
+//   * listKeys() -> Array(String)
+//
+//   * get(keys: Array(String)) -> Array(String)
+//
+//   * set(key: String, value: String)
+//
+// All values are effectively limited to 1024 bytes; keys to 100 bytes. There number of entries is
+// limited to 1000; an entry can be deleted by calling 'set' with empty 'value'.
+//
+// The API is rate-limited: if you call 'set' more than 1000 times an hour, it will throw an error.
+//
+// The abstraction this module provides on top on this API can be described as a
+// "mapping from strings to ordered collections of strings", although there are certain
+// limitations to strings. Concretely, the following methods are provided by the
+// 'RateLimitedStorage' class:
+//
+//   * async write(key, value)
+//       Pushes a new string 'value' _to the back_ of the ordered collection at the key 'key'. If
+//       there is no room for the new value in the storage, an unspecified number of values are
+//       popped _from the front_ of the ordered collection.
+//
+//       This function may or may not actually flush the data to the storage; use
+//       'hasSomethingToFlush()' and 'flush()' methods to query the state of the cache and try to
+//       flush it, respectively.
+//
+//   * async read(key)
+//       Returns the ordered collection at the key 'key' as an array of strings.
+//
+//   * hasSomethingToFlush()
+//       Returns 'true' if there are any unflushed entries in the cache, 'false' otherwise.
+//
+//   * async flush()
+//       Tries to flush the unflushed entries in the cache, if any.
+//
+// A key can only contain ASCII Latin letters (upper- or lowercase), and can not be longer than 90
+// bytes.
+// A value can only contain the printable subset of ASCII, except for the semicolon (';') character,
+// and can not be longer than 512 bytes.
+// If any of those requirements is unmet, the behavior is undefined.
+const MIN_DELAY_MILLIS = 3600; // Must be a power of two.
+
+const READ_CACHE_SIZE = 32;
+
+const hashString = str => {
+  let hash = 5381;
+
+  for (let i = str.length; i; hash = hash * 33 ^ str.charCodeAt(--i)) {}
+
+  return hash >>> 0;
+};
+
 class HardwareRateLimitError extends Error {
   constructor() {
     super('storage API rate limit');
@@ -21068,16 +21124,6 @@ class Hardware {
 
 }
 
-const READ_CACHE_SIZE = 32;
-
-const hashString = str => {
-  let hash = 5381;
-
-  for (let i = str.length; i; hash = hash * 33 ^ str.charCodeAt(--i)) {}
-
-  return hash >>> 0;
-};
-
 class Cache {
   constructor(hardware) {
     this._hardware = hardware;
@@ -21090,7 +21136,7 @@ class Cache {
     const result = Array(rawKeys.length).fill(null);
     const toFetchRawKeys = [];
     const toFetchResultIndices = [];
-    const toFetchCacheIndices = [];
+    const toFetchReadCacheIndices = [];
 
     for (let i = 0; i < rawKeys.length; ++i) {
       const rawKey = rawKeys[i];
@@ -21101,8 +21147,8 @@ class Cache {
         continue;
       }
 
-      const cacheIndex = hashString(rawKey) & READ_CACHE_SIZE - 1;
-      const readDatum = this._readCache[cacheIndex];
+      const readCacheIndex = hashString(rawKey) & READ_CACHE_SIZE - 1;
+      const readDatum = this._readCache[readCacheIndex];
 
       if (readDatum !== null && readDatum.rawKey === rawKey) {
         result[i] = readDatum.value;
@@ -21111,7 +21157,7 @@ class Cache {
 
       toFetchRawKeys.push(rawKey);
       toFetchResultIndices.push(i);
-      toFetchCacheIndices.push(cacheIndex);
+      toFetchReadCacheIndices.push(readCacheIndex);
     }
 
     const fetched = await this._hardware.readMany(toFetchRawKeys);
@@ -21119,7 +21165,7 @@ class Cache {
     for (let i = 0; i < fetched.length; ++i) {
       const value = fetched[i];
       result[toFetchResultIndices[i]] = value;
-      this._readCache[toFetchCacheIndices[i]] = {
+      this._readCache[toFetchReadCacheIndices[i]] = {
         rawKey: toFetchRawKeys[i],
         value: value
       };
@@ -21144,8 +21190,8 @@ class Cache {
     this._writeCache.push(datum);
 
     this._rawKeyToWriteDatum[rawKey] = datum;
-    const cacheIndex = hashString(rawKey) & READ_CACHE_SIZE - 1;
-    this._readCache[cacheIndex] = datum;
+    const readCacheIndex = hashString(rawKey) & READ_CACHE_SIZE - 1;
+    this._readCache[readCacheIndex] = datum;
   }
 
   async flush() {
@@ -21175,25 +21221,57 @@ class Cache {
 
 }
 
+class MetadataBuilder {
+  constructor(perKeyLimits) {
+    this._keyToMetadata = {};
+    this._keyToMaxTimer = {};
+    this._timer = 0;
+
+    for (const key in perKeyLimits) {
+      this._keyToMetadata[key] = {
+        curIndex: -1,
+        lastIndex: -1,
+        limit: perKeyLimits[key]
+      };
+      this._keyToMaxTimer[key] = -1;
+    }
+  }
+
+  feed(key, index, timer) {
+    const metadata = this._keyToMetadata[key];
+
+    if (this._keyToMaxTimer[key] < timer) {
+      this._keyToMaxTimer[key] = timer;
+      metadata.curIndex = index;
+    }
+
+    if (metadata.lastIndex < index) metadata.lastIndex = index;
+  }
+
+  finalize() {
+    return {
+      keyToMetadata: this._keyToMetadata,
+      timer: this._timer
+    };
+  }
+
+}
+
 class RateLimitedStorage {
   constructor(perKeyLimits, session) {
     this._perKeyLimits = perKeyLimits;
     this._hardware = new Hardware(session);
     this._cache = new Cache(this._hardware);
     this._lastFlushTimestamp = -Infinity;
-    this._keyToCurIndex = null;
-    this._keyToLastIndex = null;
+    this._keyToMetadata = null;
     this._timer = null;
   }
 
-  async fetchKeysIfNeeded() {
-    if (this._keyToCurIndex !== null && this._keyToLastIndex !== null && this._timer !== null) return;
+  async _fetchMetadataIfNeeded() {
+    if (this._keyToMetadata !== null && this._timer !== null) return;
     const rawKeys = await this._hardware.readKeys();
     const values = await this._hardware.readMany(rawKeys);
-    this._keyToCurIndex = {};
-    this._keyToLastIndex = {};
-    this._timer = 0;
-    const keyToMaxTimer = {};
+    const builder = new MetadataBuilder(this._perKeyLimits);
 
     for (let i = 0; i < rawKeys.length; ++i) {
       const rawKey = rawKeys[i];
@@ -21204,64 +21282,54 @@ class RateLimitedStorage {
       const index = parseInt(m[2]);
       if ((m = value.match(/^([^;]*);.*$/)) === null) continue;
       const timer = (0, _intcodec.decodeInteger)(m[1]);
-      const oldMaxTimer = keyToMaxTimer[key];
-
-      if (oldMaxTimer === undefined || oldMaxTimer < timer) {
-        this._keyToCurIndex[key] = index;
-        keyToMaxTimer[key] = timer;
-      }
-
-      const oldLast = this._keyToLastIndex[key];
-      if (oldLast === undefined || oldLast < index) this._keyToLastIndex[key] = index;
-      if (this._timer < timer) this._timer = timer;
+      builder.feed(key, index, timer);
     }
+
+    const result = builder.finalize();
+    this._keyToMetadata = result.keyToMetadata;
+    this._timer = result.timer;
   }
 
-  _tick() {
-    return ++this._timer;
-  }
+  async _chooseBucket(key, value, metadata) {
+    const index = metadata.curIndex;
 
-  _writeUpdateIndices(key, index, value) {
-    this._cache.write(`${key}${index}`, value);
+    if (index !== -1) {
+      const prefix = (await this._cache.readMany([`${key}${index}`]))[0] + ';';
+      if (this._hardware.canWrite(prefix, value)) return {
+        index: index,
+        prefix: prefix
+      };
+    }
 
-    this._keyToCurIndex[key] = index;
-    const oldLast = this._keyToLastIndex[key];
-    if (oldLast === undefined || oldLast < index) this._keyToLastIndex[key] = index;
+    return {
+      index: (index + 1) % metadata.limit,
+      prefix: (0, _intcodec.encodeInteger)(++this._timer) + ';'
+    };
   }
 
   async write(key, value) {
-    await this._fetchKeysIfNeeded();
-    const limit = this._perKeyLimits[key];
-    const index = this._keyToCurIndex[key];
+    await this._fetchMetadataIfNeeded();
+    const metadata = this._keyToMetadata[key];
+    const {
+      index,
+      prefix
+    } = await this._chooseBucket(key, value, metadata);
 
-    if (index === undefined) {
-      const prefix = (0, _intcodec.encodeInteger)(this._tick()) + ';';
+    this._cache.write(`${key}${index}`, prefix + value);
 
-      this._writeUpdateIndices(key, 0, prefix + value);
-    } else {
-      const prefix = (await this._cache.readMany([`${key}${index}`]))[0] + ';';
-
-      if (this._hardware.canWrite(prefix, value)) {
-        this._writeUpdateIndices(key, index, prefix + value);
-      } else {
-        const newPrefix = (0, _intcodec.encodeInteger)(this._tick()) + ';';
-
-        this._writeUpdateIndices(key, (index + 1) % limit, newPrefix + value);
-      }
-    }
-
-    return await this.flush();
+    metadata.curIndex = index;
+    if (metadata.lastIndex < index) metadata.lastIndex = index;
+    await this.flush();
   }
 
   async read(key) {
-    await this._fetchKeysIfNeeded();
-    const lastIndex = this._keyToLastIndex[key];
-    if (lastIndex === undefined) return [];
-    const curIndex = this._keyToCurIndex[key];
+    await this._fetchMetadataIfNeeded();
+    const metadata = this._keyToMetadata[key];
+    const nRawKeys = metadata.lastIndex + 1;
     const rawKeys = [];
 
-    for (let i = 0; i <= lastIndex; ++i) {
-      const index = (curIndex + 1 + i) % (lastIndex + 1);
+    for (let i = 0; i < nRawKeys; ++i) {
+      const index = (metadata.curIndex + 1 + i) % nRawKeys;
       rawKeys.push(`${key}${index}`);
     }
 
@@ -21284,13 +21352,14 @@ class RateLimitedStorage {
   async flush() {
     const now = (0, _utils.monotonicNowMillis)();
 
-    if (now - this._lastFlushTimestamp >= 3600) {
+    if (now - this._lastFlushTimestamp >= MIN_DELAY_MILLIS) {
       const nwrites = await this._cache.flush();
-      if (nwrites) this._lastFlushTimestamp = (0, _utils.monotonicNowMillis)() + (nwrites - 1) * 3600 / 2;
-      return true;
-    }
 
-    return false;
+      if (nwrites) {
+        const handicap = (nwrites - 1) * MIN_DELAY_MILLIS / 2;
+        this._lastFlushTimestamp = (0, _utils.monotonicNowMillis)() + handicap;
+      }
+    }
   }
 
 }
@@ -21589,7 +21658,7 @@ _vkConnect.default.subscribe(event => {
     return;
   }
 
-  if (request.next) doSend(request.next);else delete requestsByMethod[method];
+  if (request.next !== null) doSend(request.next);else delete requestsByMethod[method];
   request.callbacks[type](data);
 });
 
@@ -21609,7 +21678,7 @@ class VkRequest {
   schedule() {
     const ongoing = requestsByMethod[this.method];
 
-    if (ongoing) {
+    if (ongoing !== undefined) {
       this.next = ongoing.next;
       ongoing.next = this;
     } else {
