@@ -758,6 +758,32 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   };
 
+  const clearStatsBtn = appendInputToForm({
+    type: 'button',
+    value: 'Очистить статистику'
+  });
+
+  clearStatsBtn.onclick = () => {
+    const fn = async () => {
+      await getAccessToken('');
+      console.log('Clearing…');
+      await storage.clear();
+
+      while (storage.hasSomethingToFlush()) {
+        console.log('Sleeping…');
+        await (0, _utils.sleepMillis)(1000);
+        await storage.flush();
+      }
+
+      console.log('Done!');
+    };
+
+    fn().then(() => {}).catch(err => {
+      formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
+    });
+    return false;
+  };
+
   form.appendChild(document.createElement('hr'));
   const userIdInput = appendInputToForm({
     type: 'text',
@@ -21323,19 +21349,26 @@ class RateLimitedStorage {
     await this.flush();
   }
 
-  async read(key) {
-    await this._fetchMetadataIfNeeded();
+  _getRawKeys(key) {
     const metadata = this._keyToMetadata[key];
     const nRawKeys = metadata.lastIndex + 1;
-    const rawKeys = [];
+    const result = [];
 
     for (let i = 0; i < nRawKeys; ++i) {
       const index = (metadata.curIndex + 1 + i) % nRawKeys;
-      rawKeys.push(`${key}${index}`);
+      result.push(`${key}${index}`);
     }
 
-    const result = [];
+    return result;
+  }
+
+  async read(key) {
+    await this._fetchMetadataIfNeeded();
+
+    const rawKeys = this._getRawKeys(key);
+
     const values = await this._cache.readMany(rawKeys);
+    const result = [];
 
     for (const value of values) {
       const segments = value.split(';');
@@ -21344,6 +21377,20 @@ class RateLimitedStorage {
     }
 
     return result;
+  }
+
+  async clear(key) {
+    await this._fetchMetadataIfNeeded();
+
+    const rawKeys = this._getRawKeys(key);
+
+    for (const rawKey of rawKeys) this._cache.write(rawKey, '');
+
+    const builder = new MetadataBuilder(this._perKeyLimits);
+    const result = builder.finalize();
+    this._keyToMetadata = result.keyToMetadata;
+    this._timer = result.timer;
+    await this.flush();
   }
 
   hasSomethingToFlush() {
