@@ -973,7 +973,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   form.appendChild(document.createElement('hr'));
   form.appendChild(formLog);
-  formLog.innerHTML = (0, _utils.htmlEscape)('Это — приложение для поиска постов или комментариев определённого пользователя. ' + 'Оно использует метод execute(), который позволяет проверить 25 постов за один запрос.');
+  formLog.innerHTML = 'Привет! Это — приложение для поиска постов или комментариев определённого пользователя.' + '<br/>' + 'Оно использует метод <code>execute()</code>, который позволяет проверить 25 постов за один запрос.';
 
   form.onsubmit = () => {
     const workConfig = {
@@ -20874,7 +20874,9 @@ class PostsStorage {
 
   async getUsers() {
     await this._fetchDataIfNeeded();
-    return [...this._data.keys()];
+    const keysCopy = [...this._data.keys()];
+    keysCopy.reverse();
+    return keysCopy;
   }
 
   async getUserPosts(userId) {
