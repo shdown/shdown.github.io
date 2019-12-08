@@ -900,14 +900,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const callbacks = {
         found: async datum => {
           const link = `https://vk.com/wall${oid}_${datum.postId}`;
-          await postsStorage.addPost(oid, {
+          const isNew = await postsStorage.addPost(uid, {
             ownerId: oid,
             postId: datum.postId,
             commentId: -1
           });
           result.push({
             link: link,
-            offset: datum.offset
+            offset: datum.offset,
+            isNew: isNew
           });
           workConfig.logText(`Найдено: ${link}`);
         },
@@ -1002,6 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const a = createAnchor(datum.link);
           const li = document.createElement('li');
           li.appendChild(a);
+          li.append(datum.isNew ? '(НОВЫЙ)' : '(старый)');
           ul.appendChild(li);
         }
 
