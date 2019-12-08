@@ -1002,8 +1002,18 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const datum of result) {
           const a = createAnchor(datum.link);
           const li = document.createElement('li');
+          const gespan = document.createElement('span');
+
+          if (datum.isNew) {
+            gespan.style = 'font-weight: bold;';
+            gespan.innerHTML = ' (новый)';
+          } else {
+            gespan.style = 'color: #999;';
+            gespan.innerHTML = ' (старый)';
+          }
+
           li.appendChild(a);
-          li.append(datum.isNew ? '(НОВЫЙ)' : '(старый)');
+          li.appendChild(gespan);
           ul.appendChild(li);
         }
 
