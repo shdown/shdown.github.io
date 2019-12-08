@@ -681,6 +681,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const resolveIdToLink = id => {
+    if (id < 0) return `https://vk.com/public${-id}`;else return `https://vk.com/id${id}`;
+  };
+
+  const createAnchor = link => {
+    const a = document.createElement('a');
+    a.setAttribute('href', link);
+    a.setAttribute('rel', 'noopener noreferrer');
+    a.setAttribute('target', '_blank');
+    a.innerHTML = (0, _utils.htmlEscape)(link);
+    return a;
+  };
+
   const resultDiv = document.createElement('div');
   const workingDiv = document.createElement('div');
   const archiveDiv = document.createElement('div');
@@ -721,21 +734,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const userIds = await postsStorage.getUsers();
 
     for (const userId of userIds) {
+      const caption = document.createElement('div');
+      caption.append('Комментарии ');
+      caption.appendChild(createAnchor(resolveIdToLink(userId)));
+      caption.append(':');
       const ul = document.createElement('ul');
 
       for (const datum of await postsStorage.getUserPosts(userId)) {
-        const a = document.createElement('a');
-        const link = `https://vk.com/wall${datum.ownerId}_${datum.postId}`;
-        a.setAttribute('href', link);
-        a.setAttribute('rel', 'noopener noreferrer');
-        a.setAttribute('target', '_blank');
-        a.innerHTML = (0, _utils.htmlEscape)(link);
+        const a = createAnchor(`https://vk.com/wall${datum.ownerId}_${datum.postId}`);
         const li = document.createElement('li');
         li.appendChild(a);
         ul.appendChild(li);
       }
 
-      archiveDiv.append(`ID ${userId}:`);
+      archiveDiv.appendChild(caption);
       archiveDiv.appendChild(ul);
     }
 
@@ -753,32 +765,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   archiveBtn.onclick = () => {
     showArchive().then(() => {}).catch(err => {
-      formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
-    });
-    return false;
-  };
-
-  const clearStatsBtn = appendInputToForm({
-    type: 'button',
-    value: 'Очистить статистику'
-  });
-
-  clearStatsBtn.onclick = () => {
-    const fn = async () => {
-      await getAccessToken('');
-      console.log('Clearing…');
-      await storage.clear('s');
-
-      while (storage.hasSomethingToFlush()) {
-        console.log('Sleeping…');
-        await (0, _utils.sleepMillis)(1000);
-        await storage.flush();
-      }
-
-      console.log('Done!');
-    };
-
-    fn().then(() => {}).catch(err => {
       formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
     });
     return false;
@@ -844,7 +830,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const oid of oids) {
       const stats = await statsStorage.getStats(oid);
-      console.log(`In-storage stats: ${oid} => ${JSON.stringify(stats)}`);
       if (stats === undefined) oidsToGatherStats.push(oid);else result[oid] = stats;
     }
 
@@ -1004,7 +989,6 @@ document.addEventListener('DOMContentLoaded', () => {
     form.remove();
     body.appendChild(workingDiv);
     work(workConfig).then(result => {
-      console.log('Done');
       workingDiv.remove();
       body.appendChild(resultDiv);
 
@@ -1015,11 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ul = document.createElement('ul');
 
         for (const datum of result) {
-          const a = document.createElement('a');
-          a.setAttribute('href', datum.link);
-          a.setAttribute('rel', 'noopener noreferrer');
-          a.setAttribute('target', '_blank');
-          a.innerHTML = (0, _utils.htmlEscape)(datum.link);
+          const a = createAnchor(datum.link);
           const li = document.createElement('li');
           li.appendChild(a);
           ul.appendChild(li);
@@ -21294,8 +21274,7 @@ class RateLimitedStorage {
     this._timer = null;
   }
 
-  async _fetchMetadataIfNeeded() {
-    if (this._keyToMetadata !== null && this._timer !== null) return;
+  async _fetchMetadata() {
     const rawKeys = await this._hardware.readKeys();
     const values = await this._hardware.readMany(rawKeys);
     const builder = new MetadataBuilder(this._perKeyLimits);
@@ -21335,7 +21314,7 @@ class RateLimitedStorage {
   }
 
   async write(key, value) {
-    await this._fetchMetadataIfNeeded();
+    if (this._timer === null) await this._fetchMetadata();
     const metadata = this._keyToMetadata[key];
     const {
       index,
@@ -21363,7 +21342,7 @@ class RateLimitedStorage {
   }
 
   async read(key) {
-    await this._fetchMetadataIfNeeded();
+    if (this._timer === null) await this._fetchMetadata();
 
     const rawKeys = this._getRawKeys(key);
 
@@ -21380,16 +21359,13 @@ class RateLimitedStorage {
   }
 
   async clear(key) {
-    await this._fetchMetadataIfNeeded();
+    if (this._timer === null) await this._fetchMetadata();
 
     const rawKeys = this._getRawKeys(key);
 
     for (const rawKey of rawKeys) this._cache.write(rawKey, '');
 
-    const builder = new MetadataBuilder(this._perKeyLimits);
-    const result = builder.finalize();
-    this._keyToMetadata = result.keyToMetadata;
-    this._timer = result.timer;
+    await this._fetchMetadata();
     await this.flush();
   }
 
