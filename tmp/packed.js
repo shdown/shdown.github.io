@@ -907,6 +907,7 @@ const asyncMain = async () => {
   const progressView = new _progress_view.ProgressView(progressPainter, chartPainter);
   const resultsView = new _results_view.ResultsView();
   const formView = new _form_view.FormView();
+  const archiveView = new _archive_view.ArchiveView();
 
   const resolveDomainToId = async domain => {
     if (domain.match(/^-?\d+$/) !== null) return parseInt(domain);
