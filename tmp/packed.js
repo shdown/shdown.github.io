@@ -810,11 +810,13 @@ exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 },{}],7:[function(require,module,exports){
 "use strict";
 
+var _utils = require("./utils.js");
+
+var _global_config = require("./global_config.js");
+
 var _vk_transport_connect = require("./vk_transport_connect.js");
 
 var _vk_api = require("./vk_api.js");
-
-var _global_config = require("./global_config.js");
 
 var _algo = require("./algo.js");
 
@@ -826,13 +828,11 @@ var _progress_estimator = require("./progress_estimator.js");
 
 var _progress_painter = require("./progress_painter.js");
 
-var _utils = require("./utils.js");
+var _rate_limited_storage = require("./rate_limited_storage.js");
 
 var _stats_storage = require("./stats_storage.js");
 
 var _posts_storage = require("./posts_storage.js");
-
-var _rate_limited_storage = require("./rate_limited_storage.js");
 
 var _view_mgr = require("./view_mgr.js");
 
@@ -885,7 +885,8 @@ const asyncMain = async () => {
   installGlobalErrorHandler();
   const body = document.getElementsByTagName('body')[0];
   const viewManager = new _view_mgr.ViewManager(body);
-  viewManager.show(new _loading_view.LoadingView());
+  const loadingView = new _loading_view.LoadingView();
+  viewManager.show(loadingView);
   const transport = new _vk_transport_connect.Transport();
   transport.setAccessToken((await requestAccessToken(
   /*scope=*/
