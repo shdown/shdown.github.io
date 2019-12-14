@@ -393,6 +393,7 @@ class ArchiveView extends _view.View {
       inner.innerHTML = 'Архив пуст.';
     } else {
       for (const [entityId, posts] of data) {
+        inner.appendChild(document.createElement('hr'));
         inner.appendChild(makeSpanWithHtml('Комментарии '));
         inner.appendChild((0, _utils.createAnchor)(entityIdToLink(entityId)));
         inner.appendChild(makeSpanWithHtml(':<br/>'));
@@ -405,7 +406,6 @@ class ArchiveView extends _view.View {
           ul.appendChild(li);
         }
 
-        inner.appendChild(document.createElement('hr'));
         inner.appendChild(ul);
       }
     }
