@@ -329,7 +329,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":18,"./vk_api.js":20}],2:[function(require,module,exports){
+},{"./utils.js":19,"./vk_api.js":21}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -569,7 +569,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":18,"chart.js":9}],4:[function(require,module,exports){
+},{"./utils.js":19,"chart.js":10}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -644,7 +644,23 @@ class FormView {
 
     this._submitBtn.setAttribute('type', 'submit');
 
+    this._submitBtn.setAttribute('value', 'Найти!');
+
     this._form.appendChild(this._submitBtn);
+
+    this._archiveBtn = document.createElement('input');
+
+    this._archiveBtn.setAttribute('type', 'button');
+
+    this._archiveBtn.setAttribute('value', 'Архив');
+
+    this._archiveBtn.onclick = () => {
+      this._emitSignal('open-archive');
+
+      return false;
+    };
+
+    this._form.appendChild(this._archiveBtn);
 
     this._form.appendChild(document.createElement('hr'));
 
@@ -743,6 +759,8 @@ var _rate_limited_storage = require("./rate_limited_storage.js");
 
 var _view_mgr = require("./view_mgr.js");
 
+var _loading_view = require("./loading_view.js");
+
 var _form_view = require("./form_view.js");
 
 var _progress_view = require("./progress_view.js");
@@ -783,35 +801,12 @@ const installGlobalErrorHandler = () => {
     return false;
   };
 };
-/*const resolveIdToLink = (id) => {
-    if (id < 0)
-        return `https://vk.com/public${-id}`;
-    else
-        return `https://vk.com/id${id}`;
-};*/
-
-
-class LoadingView {
-  constructor() {
-    this._div = document.createElement('div');
-    this._div.innerHTML = 'Загрузка…';
-  }
-
-  get element() {
-    return this._div;
-  }
-
-  mount() {}
-
-  unmount() {}
-
-}
 
 const asyncMain = async () => {
   installGlobalErrorHandler();
   const body = document.getElementsByTagName('body')[0];
   const viewManager = new _view_mgr.ViewManager(body);
-  viewManager.show(new LoadingView());
+  viewManager.show(new _loading_view.LoadingView());
   const transport = new _vk_transport_connect.Transport();
   transport.setAccessToken((await requestAccessToken(
   /*scope=*/
@@ -832,6 +827,7 @@ const asyncMain = async () => {
   const chartPainter = new _chart_painter.ChartPainter();
   const progressView = new _progress_view.ProgressView(progressPainter, chartPainter);
   const resultsView = new _results_view.ResultsView();
+  const formView = new _form_view.FormView();
 
   const resolveDomainToId = async domain => {
     if (domain.match(/^-?\d+$/) !== null) return parseInt(domain);
@@ -1014,7 +1010,15 @@ const asyncMain = async () => {
     return result;
   };
 
-  const formView = new _form_view.FormView();
+  const readArchive = async () => {
+    const result = new Map();
+    const userIds = await postsStorage.getUsers();
+
+    for (const userId of userIds) result.set(userId, (await postsStorage.getUserPosts(userId)));
+
+    return result;
+  };
+
   formView.subscribe('get-subs', () => {
     getSubscriptions(formView.userDomain).then(data => {
       if (data.length === 0) formView.setLogContent('Подписок не найдено!');
@@ -1035,15 +1039,38 @@ const asyncMain = async () => {
       }
     };
     work(workConfig).then(results => {
+      session.setCancelFlag(false);
       viewManager.show(resultsView);
       resultsView.setResults(results);
     }).catch(err => {
-      viewManager.show(resultsView);
-      resultsView.setError(`Ошибка: ${err.name}: ${err.message}`);
+      session.setCancelFlag(false);
+
+      if (err instanceof _vk_api.VkApiCancellation) {
+        viewManager.show(formView);
+      } else {
+        viewManager.show(resultsView);
+        resultsView.setError(`Ошибка: ${err.name}: ${err.message}`);
+      }
     });
   });
+  formView.subscribe('open-archive', () => {
+    viewManager.show(loadingView);
+    readArchive().then(data => {
+      viewManager.show(archiveView);
+      archiveView.setData(data);
+    }).catch(err => {
+      viewManager.show(formView);
+      formView.setLogContent((0, _utils.htmlEscape)(`Ошибка: ${err.name}: ${err.message}`));
+    });
+  });
+  archiveView.subscribe('back', () => {
+    viewManager.show(formView);
+  });
+  resultsView.subscribe('back', () => {
+    viewManager.show(formView);
+  });
   progressView.subscribe('cancel', () => {
-    session.cancel();
+    session.setCancelFlag(true);
   });
   viewManager.show(formView);
 };
@@ -1244,7 +1271,7 @@ document.addEventListener('DOMContentLoaded', () => {
       body.appendChild(form);*/
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./form_view.js":4,"./global_config.js":5,"./posts_storage.js":11,"./progress_estimator.js":12,"./progress_painter.js":13,"./progress_view.js":14,"./rate_limited_storage.js":15,"./results_view.js":16,"./stats_storage.js":17,"./utils.js":18,"./view_mgr.js":19,"./vk_api.js":20,"./vk_transport_connect.js":21}],7:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./form_view.js":4,"./global_config.js":5,"./loading_view.js":8,"./posts_storage.js":12,"./progress_estimator.js":13,"./progress_painter.js":14,"./progress_view.js":15,"./rate_limited_storage.js":16,"./results_view.js":17,"./stats_storage.js":18,"./utils.js":19,"./view_mgr.js":20,"./vk_api.js":21,"./vk_transport_connect.js":22}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1306,11 +1333,29 @@ const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 exports.decodeManyIntegers = decodeManyIntegers;
 
 },{}],8:[function(require,module,exports){
+class LoadingView {
+    constructor() {
+        this._div = document.createElement('div');
+        this._div.innerHTML = 'Загрузка…';
+    }
+
+    get element() {
+        return this._div;
+    }
+
+    mount() {
+    }
+
+    unmount() {
+    }
+}
+
+},{}],9:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -16444,7 +16489,7 @@ exports.decodeManyIntegers = decodeManyIntegers;
   return src;
 });
 
-},{"moment":10}],10:[function(require,module,exports){
+},{"moment":11}],11:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -21048,7 +21093,7 @@ exports.decodeManyIntegers = decodeManyIntegers;
 
 })));
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21135,7 +21180,7 @@ class PostsStorage {
 
 exports.PostsStorage = PostsStorage;
 
-},{"./intcodec.js":7}],12:[function(require,module,exports){
+},{"./intcodec.js":7}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21193,7 +21238,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21225,7 +21270,7 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21280,13 +21325,7 @@ class ProgressView {
     return this._div;
   }
 
-  mount() {
-    this._progress_painter.reset();
-
-    this._chart_painter.reset();
-
-    this._log.innerHTML = '';
-  }
+  mount() {}
 
   unmount() {
     this._progress_painter.reset();
@@ -21304,7 +21343,7 @@ class ProgressView {
 
 exports.ProgressView = ProgressView;
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21705,7 +21744,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":7,"./utils.js":18,"./vk_api.js":20}],16:[function(require,module,exports){
+},{"./intcodec.js":7,"./utils.js":19,"./vk_api.js":21}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21717,8 +21756,13 @@ var _utils = require("./utils.js");
 
 class ResultsView {
   constructor() {
+    this._signalHandlers = {};
     this._div = document.createElement('div');
     this._inner = null;
+  }
+
+  subscribe(signal, fn) {
+    this._signalHandlers[signal] = fn;
   }
 
   get element() {
@@ -21780,7 +21824,7 @@ class ResultsView {
 
 exports.ResultsView = ResultsView;
 
-},{"./utils.js":18}],17:[function(require,module,exports){
+},{"./utils.js":19}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21826,7 +21870,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":7}],18:[function(require,module,exports){
+},{"./intcodec.js":7}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21900,7 +21944,7 @@ const createAnchor = link => {
 
 exports.createAnchor = createAnchor;
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21937,7 +21981,7 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22000,8 +22044,8 @@ class VkApiSession {
     await (0, _utils.sleepMillis)(ms);
   }
 
-  cancel() {
-    this._cancelFlag = true;
+  setCancel(flag) {
+    this._cancelFlag = flag;
   }
 
   setRateLimitCallback(fn) {
@@ -22072,7 +22116,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":18}],21:[function(require,module,exports){
+},{"./utils.js":19}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22203,4 +22247,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":20,"@vkontakte/vk-connect":8}]},{},[6]);
+},{"./vk_api.js":21,"@vkontakte/vk-connect":9}]},{},[6]);
