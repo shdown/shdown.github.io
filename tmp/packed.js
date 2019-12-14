@@ -1333,22 +1333,30 @@ const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 exports.decodeManyIntegers = decodeManyIntegers;
 
 },{}],8:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.LoadingView = void 0;
+
 class LoadingView {
-    constructor() {
-        this._div = document.createElement('div');
-        this._div.innerHTML = 'Загрузка…';
-    }
+  constructor() {
+    this._div = document.createElement('div');
+    this._div.innerHTML = 'Загрузка…';
+  }
 
-    get element() {
-        return this._div;
-    }
+  get element() {
+    return this._div;
+  }
 
-    mount() {
-    }
+  mount() {}
 
-    unmount() {
-    }
+  unmount() {}
+
 }
+
+exports.LoadingView = LoadingView;
 
 },{}],9:[function(require,module,exports){
 (function (global){
