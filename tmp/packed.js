@@ -329,13 +329,15 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":20,"./vk_api.js":22}],2:[function(require,module,exports){
+},{"./utils.js":20,"./vk_api.js":23}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.ArchiveView = void 0;
+
+var _view = require("./view.js");
 
 var _utils = require("./utils.js");
 
@@ -353,9 +355,9 @@ const makeSpanWithHtml = html => {
   return span;
 };
 
-class ArchiveView {
+class ArchiveView extends _view.View {
   constructor() {
-    this._signalHandlers = {};
+    super();
     this._div = document.createElement('div');
     this._backBtn = document.createElement('input');
 
@@ -364,7 +366,7 @@ class ArchiveView {
     this._backBtn.setAttribute('value', 'Назад');
 
     this._backBtn.onclick = () => {
-      this._emitSignal('back');
+      super._emitSignal('back');
 
       return false;
     };
@@ -403,20 +405,12 @@ class ArchiveView {
           ul.appendChild(li);
         }
 
+        inner.appendChild(document.createElement('hr'));
         inner.appendChild(ul);
       }
     }
 
     this._setInner(inner);
-  }
-
-  _emitSignal(signal) {
-    const fn = this._signalHandlers[signal];
-    if (fn !== undefined) fn();
-  }
-
-  subscribe(signal, fn) {
-    this._signalHandlers[signal] = fn;
   }
 
   get element() {
@@ -431,7 +425,7 @@ class ArchiveView {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./utils.js":20}],3:[function(require,module,exports){
+},{"./utils.js":20,"./view.js":21}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -679,15 +673,17 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.FormView = void 0;
 
+var _view = require("./view.js");
+
 const makeDivWithHtml = html => {
   const result = document.createElement('div');
   result.innerHTML = html;
   return result;
 };
 
-class FormView {
+class FormView extends _view.View {
   constructor() {
-    this._signalHandlers = {};
+    super();
     this._form = document.createElement('form');
 
     this._form.appendChild(makeDivWithHtml('ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):'));
@@ -719,7 +715,7 @@ class FormView {
     this._getSubsBtn.style = 'display: block;';
 
     this._getSubsBtn.onclick = () => {
-      this._emitSignal('get-subs');
+      super._emitSignal('get-subs');
 
       return false;
     };
@@ -757,7 +753,7 @@ class FormView {
     this._archiveBtn.setAttribute('value', 'Архив');
 
     this._archiveBtn.onclick = () => {
-      this._emitSignal('open-archive');
+      super._emitSignal('open-archive');
 
       return false;
     };
@@ -771,19 +767,10 @@ class FormView {
     this._form.appendChild(this._log);
 
     this._form.onsubmit = () => {
-      this._emitSignal('submit');
+      super._emitSignal('submit');
 
       return false;
     };
-  }
-
-  _emitSignal(signal) {
-    const fn = this._signalHandlers[signal];
-    if (fn !== undefined) fn();
-  }
-
-  subscribe(signal, fn) {
-    this._signalHandlers[signal] = fn;
   }
 
   get userDomain() {
@@ -820,7 +807,7 @@ class FormView {
 
 exports.FormView = FormView;
 
-},{}],6:[function(require,module,exports){
+},{"./view.js":21}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1188,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-},{"./algo.js":1,"./archive_view.js":2,"./chart_ctl.js":3,"./chart_painter.js":4,"./form_view.js":5,"./global_config.js":6,"./loading_view.js":9,"./posts_storage.js":13,"./progress_estimator.js":14,"./progress_painter.js":15,"./progress_view.js":16,"./rate_limited_storage.js":17,"./results_view.js":18,"./stats_storage.js":19,"./utils.js":20,"./view_mgr.js":21,"./vk_api.js":22,"./vk_transport_connect.js":23}],8:[function(require,module,exports){
+},{"./algo.js":1,"./archive_view.js":2,"./chart_ctl.js":3,"./chart_painter.js":4,"./form_view.js":5,"./global_config.js":6,"./loading_view.js":9,"./posts_storage.js":13,"./progress_estimator.js":14,"./progress_painter.js":15,"./progress_view.js":16,"./rate_limited_storage.js":17,"./results_view.js":18,"./stats_storage.js":19,"./utils.js":20,"./view_mgr.js":22,"./vk_api.js":23,"./vk_transport_connect.js":24}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1257,8 +1244,11 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.LoadingView = void 0;
 
-class LoadingView {
+var _view = require("./view.js");
+
+class LoadingView extends _view.View {
   constructor() {
+    super();
     this._div = document.createElement('div');
     this._div.innerHTML = 'Загрузка…';
   }
@@ -1275,7 +1265,7 @@ class LoadingView {
 
 exports.LoadingView = LoadingView;
 
-},{}],10:[function(require,module,exports){
+},{"./view.js":21}],10:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -21203,9 +21193,11 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.ProgressView = void 0;
 
-class ProgressView {
+var _view = require("./view.js");
+
+class ProgressView extends _view.View {
   constructor(progress_painter, chart_painter) {
-    this._signalHandlers = {};
+    super();
     this._div = document.createElement('div');
     this._progress_painter = progress_painter;
     this._chart_painter = chart_painter;
@@ -21223,27 +21215,19 @@ class ProgressView {
     this._cancelBtn.setAttribute('value', 'Отмена');
 
     this._cancelBtn.onclick = () => {
-      this._emitSignal('cancel');
+      super._emitSignal('cancel');
 
       return false;
     };
 
     this._log = document.createElement('span');
+    this._log.style = 'margin-left: 1em;';
 
     this._bottom.appendChild(this._cancelBtn);
 
     this._bottom.appendChild(this._log);
 
     this._div.appendChild(this._bottom);
-  }
-
-  _emitSignal(signal) {
-    const fn = this._signalHandlers[signal];
-    if (fn !== undefined) fn();
-  }
-
-  subscribe(signal, fn) {
-    this._signalHandlers[signal] = fn;
   }
 
   get element() {
@@ -21268,7 +21252,7 @@ class ProgressView {
 
 exports.ProgressView = ProgressView;
 
-},{}],17:[function(require,module,exports){
+},{"./view.js":21}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21669,7 +21653,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":8,"./utils.js":20,"./vk_api.js":22}],18:[function(require,module,exports){
+},{"./intcodec.js":8,"./utils.js":20,"./vk_api.js":23}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21677,11 +21661,13 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.ResultsView = void 0;
 
+var _view = require("./view.js");
+
 var _utils = require("./utils.js");
 
-class ResultsView {
+class ResultsView extends _view.View {
   constructor() {
-    this._signalHandlers = {};
+    super();
     this._div = document.createElement('div');
     this._backBtn = document.createElement('input');
 
@@ -21690,7 +21676,7 @@ class ResultsView {
     this._backBtn.setAttribute('value', 'Назад');
 
     this._backBtn.onclick = () => {
-      this._emitSignal('back');
+      super._emitSignal('back');
 
       return false;
     };
@@ -21700,15 +21686,6 @@ class ResultsView {
     this._div.appendChild(document.createElement('hr'));
 
     this._inner = null;
-  }
-
-  _emitSignal(signal) {
-    const fn = this._signalHandlers[signal];
-    if (fn !== undefined) fn();
-  }
-
-  subscribe(signal, fn) {
-    this._signalHandlers[signal] = fn;
   }
 
   get element() {
@@ -21770,7 +21747,7 @@ class ResultsView {
 
 exports.ResultsView = ResultsView;
 
-},{"./utils.js":20}],19:[function(require,module,exports){
+},{"./utils.js":20,"./view.js":21}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21896,6 +21873,32 @@ exports.createAnchor = createAnchor;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.View = void 0;
+
+class View {
+  constructor() {
+    this._signalHandlers = {};
+  }
+
+  subscribe(signal, fn) {
+    this._signalHandlers[signal] = fn;
+  }
+
+  _emitSignal(signal) {
+    const fn = this._signalHandlers[signal];
+    if (fn !== undefined) fn();
+  }
+
+}
+
+exports.View = View;
+
+},{}],22:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
 exports.ViewManager = void 0;
 
 class ViewManager {
@@ -21927,7 +21930,7 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22062,7 +22065,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":20}],23:[function(require,module,exports){
+},{"./utils.js":20}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22193,4 +22196,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":22,"@vkontakte/vk-connect":10}]},{},[7]);
+},{"./vk_api.js":23,"@vkontakte/vk-connect":10}]},{},[7]);
