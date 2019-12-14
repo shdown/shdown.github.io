@@ -608,10 +608,13 @@ class FormView {
 
     this._form.appendChild(this._ownersInput);
 
-    this._getSubsBtn = document.createElement('button');
-    this._getSubsBtn.style = 'display: block;';
+    this._getSubsBtn = document.createElement('input');
+
+    this._getSubsBtn.setAttribute('type', 'button');
 
     this._getSubsBtn.setAttribute('value', 'Заполнить подписками пользователя');
+
+    this._getSubsBtn.style = 'display: block;';
 
     this._getSubsBtn.onclick = () => {
       this._emitSignal('get-subs');
@@ -664,7 +667,7 @@ class FormView {
   }
 
   get userDomain() {
-    return parseInt(this._userInput.value);
+    return this._userInput.value;
   }
 
   get ownerDomains() {
