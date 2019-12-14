@@ -824,7 +824,7 @@ const asyncMain = async () => {
   const statsStorage = new _stats_storage.StatsStorage(storage);
   const postsStorage = new _posts_storage.PostsStorage(storage);
   const progressPainter = new _progress_painter.ProgressPainter();
-  const chartPainer = new _chart_painter.ChartPainter();
+  const chartPainter = new _chart_painter.ChartPainter();
   const progressView = new _progress_view.ProgressView(progressPainter, chartPainter);
   const resultsView = new _results_view.ResultsView();
 
