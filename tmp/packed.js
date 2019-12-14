@@ -329,7 +329,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":15,"./vk_api.js":16}],2:[function(require,module,exports){
+},{"./utils.js":18,"./vk_api.js":20}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -569,7 +569,135 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":15,"chart.js":8}],4:[function(require,module,exports){
+},{"./utils.js":18,"chart.js":9}],4:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.FormView = void 0;
+
+const makeDiv = html => {
+  const result = document.createElement('div');
+  result.innerHTML = html;
+  return result;
+};
+
+class FormView {
+  constructor() {
+    this._signalHandlers = {};
+    this._form = document.createElement('form');
+
+    this._form.appendChild(makeDiv('ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):'));
+
+    this._userInput = document.createElement('input');
+
+    this._userInput.setAttribute('type', 'text');
+
+    this._userInput.setAttribute('required', '1');
+
+    this._form.appendChild(this._userInput);
+
+    this._form.appendChild(document.createElement('hr'));
+
+    this._form.appendChild(makeDiv('Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или ' + 'переводами строки:'));
+
+    this._ownersInput = document.createElement('textarea');
+
+    this._ownersInput.setAttribute('required', '1');
+
+    this._form.appendChild(this._ownersInput);
+
+    this._getSubsBtn = document.createElement('button');
+    this._getSubsBtn.style = 'display: block;';
+
+    this._getSubsBtn.setAttribute('value', 'Заполнить подписками пользователя');
+
+    this._getSubsBtn.onclick = () => {
+      this._emitSignal('get-subs');
+
+      return false;
+    };
+
+    this._form.appendChild(this._getSubsBtn);
+
+    this._form.appendChild(document.createElement('hr'));
+
+    this._form.appendChild(makeDiv('Ограничение по времени, в днях:'));
+
+    this._timeLimitInput = document.createElement('input');
+
+    this._timeLimitInput.setAttribute('type', 'number');
+
+    this._timeLimitInput.setAttribute('required', '1');
+
+    this._timeLimitInput.setAttribute('value', '30');
+
+    this._form.appendChild(this._timeLimitInput);
+
+    this._form.appendChild(document.createElement('hr'));
+
+    this._submitBtn = document.createElement('submit');
+
+    this._form.appendChild(this._submitBtn);
+
+    this._form.appendChild(document.createElement('hr'));
+
+    this._log = makeDiv('');
+
+    this._form.appendChild(this._log);
+
+    this._form.onsubmit = () => {
+      this._emitSignal('submit');
+
+      return false;
+    };
+  }
+
+  _emitSignal(signal) {
+    const fn = this._signalHandlers[signal];
+    if (fn !== undefined) fn();
+  }
+
+  subscribe(signal, fn) {
+    this._signalHandlers[signal] = fn;
+  }
+
+  get userDomain() {
+    return parseInt(this._userInput.value);
+  }
+
+  get ownerDomains() {
+    return this._ownersInput.value.split(/[,\s]/).filter(x => x !== '');
+  }
+
+  set ownerDomains(domains) {
+    this._ownersInput.value = domains.join('\n');
+  }
+
+  get timeLimitSeconds() {
+    return parseFloat(this._timeLimitInput.value) * 24 * 60 * 60;
+  }
+
+  get element() {
+    return this._form;
+  }
+
+  mount() {
+    this._log.innerHTML = 'Привет! Это — приложение для поиска постов или комментариев определённого ' + 'пользователя. <br/> Оно использует метод <code>execute()</code>, который позволяет ' + 'проверить 25 постов за один запрос.';
+  }
+
+  unmount() {}
+
+  setLogContent(html) {
+    this._log.innerHTML = html;
+  }
+
+}
+
+exports.FormView = FormView;
+
+},{}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -581,7 +709,7 @@ const GLOBAL_CONFIG = {
 };
 exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 
 var _vk_transport_connect = require("./vk_transport_connect.js");
@@ -608,6 +736,14 @@ var _posts_storage = require("./posts_storage.js");
 
 var _rate_limited_storage = require("./rate_limited_storage.js");
 
+var _view_mgr = require("./view_mgr.js");
+
+var _form_view = require("./form_view.js");
+
+var _progress_view = require("./progress_view.js");
+
+var _results_view = require("./results_view.js");
+
 const makeCallbackDispatcher = callbacks => {
   return async (what, arg) => {
     const fn = callbacks[what];
@@ -615,8 +751,21 @@ const makeCallbackDispatcher = callbacks => {
   };
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  new _vk_transport_connect.VkRequest('VKWebAppInit', {}).schedule();
+const requestAccessToken = async scope => {
+  const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
+    app_id: _global_config.GLOBAL_CONFIG.APP_ID,
+    scope: scope
+  });
+
+  const splitPermissions = s => s ? s.split(',') : [];
+
+  const isSubset = (a, b) => new Set([...a, ...b]).size === new Set(b).size;
+
+  if (!isSubset(splitPermissions(scope), splitPermissions(result.scope))) throw new Error(`Requested scope "${scope}", got "${result.scope}"`);
+  return result.access_token;
+};
+
+const installGlobalErrorHandler = () => {
   const rootDiv = document.getElementById('root');
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
@@ -628,9 +777,40 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log(errorObj);
     return false;
   };
+};
+/*const resolveIdToLink = (id) => {
+    if (id < 0)
+        return `https://vk.com/public${-id}`;
+    else
+        return `https://vk.com/id${id}`;
+};*/
 
+
+class LoadingView {
+  constructor() {
+    this._div = document.createElement('div');
+    this._div.innerHTML = 'Загрузка…';
+  }
+
+  get element() {
+    return this._div;
+  }
+
+  mount() {}
+
+  unmount() {}
+
+}
+
+const asyncMain = async () => {
+  installGlobalErrorHandler();
   const body = document.getElementsByTagName('body')[0];
+  const viewManager = new _view_mgr.ViewManager(body);
+  viewManager.show(new LoadingView());
   const transport = new _vk_transport_connect.Transport();
+  transport.setAccessToken((await requestAccessToken(
+  /*scope=*/
+  '')));
   const session = new _vk_api.VkApiSession(transport);
   const storage = new _rate_limited_storage.RateLimitedStorage(
   /*limits=*/
@@ -643,20 +823,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }, session);
   const statsStorage = new _stats_storage.StatsStorage(storage);
   const postsStorage = new _posts_storage.PostsStorage(storage);
-
-  const getAccessToken = async scope => {
-    const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
-      app_id: _global_config.GLOBAL_CONFIG.APP_ID,
-      scope: scope
-    });
-
-    const splitPermissions = s => s ? s.split(',') : [];
-
-    const isSubset = (a, b) => new Set([...a, ...b]).size === new Set(b).size;
-
-    if (!isSubset(splitPermissions(scope), splitPermissions(result.scope))) throw new Error(`Requested scope "${scope}", got "${result.scope}"`);
-    transport.setAccessToken(result.access_token);
-  };
+  const progressPainter = new _progress_painter.ProgressPainter();
+  const chartPainer = new _chart_painter.ChartPainter();
+  const progressView = new _progress_view.ProgressView(progressPainter, chartPainter);
+  const resultsView = new _results_view.ResultsView();
 
   const resolveDomainToId = async domain => {
     if (domain.match(/^-?\d+$/) !== null) return parseInt(domain);
@@ -681,110 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const resolveIdToLink = id => {
-    if (id < 0) return `https://vk.com/public${-id}`;else return `https://vk.com/id${id}`;
-  };
-
-  const createAnchor = link => {
-    const a = document.createElement('a');
-    a.setAttribute('href', link);
-    a.setAttribute('rel', 'noopener noreferrer');
-    a.setAttribute('target', '_blank');
-    a.innerHTML = (0, _utils.htmlEscape)(link);
-    return a;
-  };
-
-  const resultDiv = document.createElement('div');
-  const workingDiv = document.createElement('div');
-  const archiveDiv = document.createElement('div');
-  const workingText = document.createElement('div');
-  workingText.innerHTML = '…';
-  const progressPainter = new _progress_painter.ProgressPainter();
-  progressPainter.element.style = 'display: block; width: 100%;';
-  const chartPainter = new _chart_painter.ChartPainter();
-  workingDiv.appendChild(progressPainter.element);
-  workingDiv.appendChild(chartPainter.element);
-  workingDiv.appendChild(workingText);
-  const form = document.createElement('form');
-  const formLog = document.createElement('div');
-
-  const appendInputToForm = props => {
-    const elem = document.createElement(props.tag || 'input');
-    if (props.type !== undefined) elem.setAttribute('type', props.type);
-    if (props.required) elem.setAttribute('required', '1');
-    if (props.value !== undefined) elem.setAttribute('value', props.value);
-
-    if (props.label !== undefined) {
-      const text = document.createElement('div');
-      text.innerHTML = props.label;
-      form.appendChild(text);
-    }
-
-    form.appendChild(elem);
-    return elem;
-  };
-
-  const showArchive = async () => {
-    form.remove();
-    body.appendChild(archiveDiv);
-    const waitingText = document.createElement('div');
-    waitingText.innerHTML = (0, _utils.htmlEscape)('Загрузка архива…');
-    archiveDiv.appendChild(waitingText);
-    await getAccessToken('');
-    const userIds = await postsStorage.getUsers();
-
-    for (const userId of userIds) {
-      const caption = document.createElement('div');
-      caption.append('Комментарии ');
-      caption.appendChild(createAnchor(resolveIdToLink(userId)));
-      caption.append(':');
-      const ul = document.createElement('ul');
-
-      for (const datum of await postsStorage.getUserPosts(userId)) {
-        const a = createAnchor(`https://vk.com/wall${datum.ownerId}_${datum.postId}`);
-        const li = document.createElement('li');
-        li.appendChild(a);
-        ul.appendChild(li);
-      }
-
-      archiveDiv.appendChild(caption);
-      archiveDiv.appendChild(ul);
-    }
-
-    waitingText.remove();
-
-    if (userIds.length === 0) {
-      archiveDiv.append('Архив пуст.');
-    }
-  };
-
-  const archiveBtn = appendInputToForm({
-    type: 'button',
-    value: 'Архив'
-  });
-
-  archiveBtn.onclick = () => {
-    showArchive().then(() => {}).catch(err => {
-      formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
-    });
-    return false;
-  };
-
-  form.appendChild(document.createElement('hr'));
-  const userIdInput = appendInputToForm({
-    type: 'text',
-    label: 'ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):',
-    required: true
-  });
-  form.appendChild(document.createElement('hr'));
-  const ownerIdsInput = appendInputToForm({
-    tag: 'textarea',
-    label: 'Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки:',
-    required: true
-  });
-
   const getSubscriptions = async userDomain => {
-    await getAccessToken('');
     session.setRateLimitCallback(null);
     const uid = await resolveDomainToId(userDomain);
     const resp = await session.apiRequest('users.getSubscriptions', {
@@ -799,30 +866,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return result;
   };
-
-  form.appendChild(document.createElement('br'));
-  const getSubsBtn = appendInputToForm({
-    type: 'button',
-    value: 'Заполнить подписками пользователя'
-  });
-
-  getSubsBtn.onclick = () => {
-    getSubscriptions(userIdInput.value).then(result => {
-      if (result.length === 0) formLog.innerHTML = `Подписок не найдено!`;
-      ownerIdsInput.value = result.join('\n');
-    }).catch(err => {
-      formLog.innerHTML = `Ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
-    });
-    return false;
-  };
-
-  form.appendChild(document.createElement('hr'));
-  const timeLimitInput = appendInputToForm({
-    type: 'number',
-    label: 'Ограничение по времени, в днях:',
-    value: '30',
-    required: true
-  });
 
   const resolveStatsFor = async (oids, resolveConfig) => {
     const result = {};
@@ -859,7 +902,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const work = async workConfig => {
     workConfig.logText('Получаю токен…');
-    await getAccessToken('');
     session.setRateLimitCallback(reason => {
       workConfig.logText(`Умерим пыл (${reason})`);
     });
@@ -967,72 +1009,237 @@ document.addEventListener('DOMContentLoaded', () => {
     return result;
   };
 
-  form.appendChild(document.createElement('hr'));
-  appendInputToForm({
-    type: 'submit'
+  const formView = new _form_view.FormView();
+  formView.subscribe('get-subs', () => {
+    getSubscriptions(formView.userDomain).then(data => {
+      if (data.length === 0) formView.setLogContent('Подписок не найдено!');
+      formView.ownerDomains = data;
+    }).catch(err => {
+      formView.setLogContent((0, _utils.htmlEscape)(`Ошибка: ${err.name}: ${err.message}`));
+    });
   });
-  form.appendChild(document.createElement('hr'));
-  form.appendChild(formLog);
-  formLog.innerHTML = 'Привет! Это — приложение для поиска постов или комментариев определённого пользователя.' + '<br/>' + 'Оно использует метод <code>execute()</code>, который позволяет проверить 25 постов за один запрос.';
-
-  form.onsubmit = () => {
+  formView.subscribe('submit', () => {
+    viewManager.show(progressView);
     const workConfig = {
-      userDomain: userIdInput.value,
-      publicDomains: ownerIdsInput.value.split(/[,\s]/).filter(domain => domain !== ''),
-      timeLimit: parseFloat(timeLimitInput.value) * 24 * 60 * 60,
+      userDomain: formView.userDomain,
+      publicDomains: formView.ownerDomains,
+      timeLimit: formView.timeLimitSeconds,
       ignorePinned: false,
       logText: text => {
-        workingText.innerHTML = (0, _utils.htmlEscape)(text);
-      },
-      logHTML: html => {
-        workingText.innerHTML = html;
+        formView.setLogContent((0, _utils.htmlEscape)(text));
       }
     };
-    form.remove();
-    body.appendChild(workingDiv);
-    work(workConfig).then(result => {
-      workingDiv.remove();
-      body.appendChild(resultDiv);
-
-      if (result.length === 0) {
-        resultDiv.innerHTML = 'Ничего не найдено! 😢';
-      } else {
-        resultDiv.innerHTML = 'Найдены посты:<br/>';
-        const ul = document.createElement('ul');
-
-        for (const datum of result) {
-          const a = createAnchor(datum.link);
-          const li = document.createElement('li');
-          const gespan = document.createElement('span');
-
-          if (datum.isNew) {
-            gespan.style = 'font-weight: bold;';
-            gespan.innerHTML = ' (новый)';
-          } else {
-            gespan.style = 'color: #999;';
-            gespan.innerHTML = ' (старый)';
-          }
-
-          li.appendChild(a);
-          li.appendChild(gespan);
-          ul.appendChild(li);
-        }
-
-        resultDiv.appendChild(ul);
-      }
+    work(workConfig).then(results => {
+      viewManager.show(resultsView);
+      resultsView.setResults(results);
     }).catch(err => {
-      console.log(err);
-      workingDiv.remove();
-      body.appendChild(resultDiv);
-      resultDiv.innerHTML = `Произошла ошибка: ${(0, _utils.htmlEscape)(err.name)}: ${(0, _utils.htmlEscape)(err.message)}`;
+      viewManager.show(resultsView);
+      resultsView.setError(`Ошибка: ${err.name}: ${err.message}`);
     });
-    return false;
-  };
+  });
+  progressView.subscribe('cancel', () => {
+    session.cancel();
+  });
+  viewManager.show(formView);
+};
 
-  body.appendChild(form);
+document.addEventListener('DOMContentLoaded', () => {
+  new _vk_transport_connect.VkRequest('VKWebAppInit', {}).schedule();
+  asyncMain().then(() => {}).catch(err => {
+    throw err;
+  });
+  /*    const resultDiv = document.createElement('div');
+  
+      const workingDiv = document.createElement('div');
+      const archiveDiv = document.createElement('div');
+      const workingText = document.createElement('div');
+      workingText.innerHTML = '…';
+      progressPainter.element.style = 'display: block; width: 100%;';
+      const chartPainter = new ChartPainter();
+      workingDiv.appendChild(progressPainter.element);
+      workingDiv.appendChild(chartPainter.element);
+      workingDiv.appendChild(workingText);
+  
+      const form = document.createElement('form');
+      const formLog = document.createElement('div');
+      const appendInputToForm = (props) => {
+          const elem = document.createElement(props.tag || 'input');
+          if (props.type !== undefined)
+              elem.setAttribute('type', props.type);
+          if (props.required)
+              elem.setAttribute('required', '1');
+          if (props.value !== undefined)
+              elem.setAttribute('value', props.value);
+          if (props.label !== undefined) {
+              const text = document.createElement('div');
+              text.innerHTML = props.label;
+              form.appendChild(text);
+          }
+          form.appendChild(elem);
+          return elem;
+      };
+  
+      const showArchive = async () => {
+          form.remove();
+          body.appendChild(archiveDiv);
+  
+          const waitingText = document.createElement('div');
+          waitingText.innerHTML = htmlEscape('Загрузка архива…');
+          archiveDiv.appendChild(waitingText);
+  
+          await getAccessToken('');
+  
+          const userIds = await postsStorage.getUsers();
+          for (const userId of userIds) {
+              const caption = document.createElement('div');
+              caption.append('Комментарии ');
+              caption.appendChild(createAnchor(resolveIdToLink(userId)));
+              caption.append(':');
+  
+              const ul = document.createElement('ul');
+              for (const datum of await postsStorage.getUserPosts(userId)) {
+                  const a = createAnchor(`https://vk.com/wall${datum.ownerId}_${datum.postId}`);
+                  const li = document.createElement('li');
+                  li.appendChild(a);
+                  ul.appendChild(li);
+              }
+  
+              archiveDiv.appendChild(caption);
+              archiveDiv.appendChild(ul);
+          }
+  
+          waitingText.remove();
+          if (userIds.length === 0) {
+              archiveDiv.append('Архив пуст.');
+          }
+      };
+  
+      const archiveBtn = appendInputToForm({
+          type: 'button',
+          value: 'Архив',
+      });
+      archiveBtn.onclick = () => {
+          showArchive()
+              .then(() => {})
+              .catch((err) => {
+                  formLog.innerHTML = `Ошибка: ${htmlEscape(err.name)}: ${htmlEscape(err.message)}`;
+              });
+          return false;
+      };
+      form.appendChild(document.createElement('hr'));
+  
+      const userIdInput = appendInputToForm({
+          type: 'text',
+          label: 'ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):',
+          required: true,
+      });
+      form.appendChild(document.createElement('hr'));
+      const ownerIdsInput = appendInputToForm({
+          tag: 'textarea',
+          label: 'Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки:',
+          required: true,
+      });
+      form.appendChild(document.createElement('br'));
+      const getSubsBtn = appendInputToForm({
+          type: 'button',
+          value: 'Заполнить подписками пользователя',
+      });
+      getSubsBtn.onclick = () => {
+          getSubscriptions(userIdInput.value)
+              .then((result) => {
+                  if (result.length === 0)
+                      formLog.innerHTML = `Подписок не найдено!`;
+                  ownerIdsInput.value = result.join('\n');
+              })
+              .catch((err) => {
+                  formLog.innerHTML = `Ошибка: ${htmlEscape(err.name)}: ${htmlEscape(err.message)}`;
+              });
+          return false;
+      };
+  
+      form.appendChild(document.createElement('hr'));
+      const timeLimitInput = appendInputToForm({
+          type: 'number',
+          label: 'Ограничение по времени, в днях:',
+          value: '30',
+          required: true,
+      });
+  
+      form.appendChild(document.createElement('hr'));
+      appendInputToForm({type: 'submit'});
+  
+      form.appendChild(document.createElement('hr'));
+      form.appendChild(formLog);
+  
+      formLog.innerHTML = (
+          'Привет! Это — приложение для поиска постов или комментариев определённого пользователя.' +
+          '<br/>' +
+          'Оно использует метод <code>execute()</code>, который позволяет проверить 25 постов за один запрос.');
+  
+      form.onsubmit = () => {
+          const workConfig = {
+              userDomain: userIdInput.value,
+              publicDomains: ownerIdsInput.value
+                  .split(/[,\s]/)
+                  .filter((domain) => domain !== ''),
+              timeLimit: parseFloat(timeLimitInput.value) * 24 * 60 * 60,
+              ignorePinned: false,
+              logText: (text) => {
+                  workingText.innerHTML = htmlEscape(text);
+              },
+              logHTML: (html) => {
+                  workingText.innerHTML = html;
+              },
+          };
+  
+          form.remove();
+          body.appendChild(workingDiv);
+  
+          work(workConfig)
+              .then((result) => {
+                  workingDiv.remove();
+                  body.appendChild(resultDiv);
+  
+                  if (result.length === 0) {
+                      resultDiv.innerHTML = 'Ничего не найдено! 😢';
+                  } else {
+                      resultDiv.innerHTML = 'Найдены посты:<br/>';
+                      const ul = document.createElement('ul');
+                      for (const datum of result) {
+                          const a = createAnchor(datum.link);
+                          const li = document.createElement('li');
+  
+                          const gespan = document.createElement('span');
+                          if (datum.isNew) {
+                              gespan.style = 'font-weight: bold;';
+                              gespan.innerHTML = ' (новый)';
+                          } else {
+                              gespan.style = 'color: #999;';
+                              gespan.innerHTML = ' (старый)';
+                          }
+  
+                          li.appendChild(a);
+                          li.appendChild(gespan);
+                          ul.appendChild(li);
+                      }
+                      resultDiv.appendChild(ul);
+                  }
+              })
+              .catch((err) => {
+                  console.log(err);
+  
+                  workingDiv.remove();
+                  body.appendChild(resultDiv);
+  
+                  resultDiv.innerHTML = `Произошла ошибка: ${htmlEscape(err.name)}: ${htmlEscape(err.message)}`;
+              });
+          return false;
+      };
+  
+      body.appendChild(form);*/
 });
 
-},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./global_config.js":4,"./posts_storage.js":10,"./progress_estimator.js":11,"./progress_painter.js":12,"./rate_limited_storage.js":13,"./stats_storage.js":14,"./utils.js":15,"./vk_api.js":16,"./vk_transport_connect.js":17}],6:[function(require,module,exports){
+},{"./algo.js":1,"./chart_ctl.js":2,"./chart_painter.js":3,"./form_view.js":4,"./global_config.js":5,"./posts_storage.js":11,"./progress_estimator.js":12,"./progress_painter.js":13,"./progress_view.js":14,"./rate_limited_storage.js":15,"./results_view.js":16,"./stats_storage.js":17,"./utils.js":18,"./view_mgr.js":19,"./vk_api.js":20,"./vk_transport_connect.js":21}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1093,12 +1300,12 @@ const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 
 exports.decodeManyIntegers = decodeManyIntegers;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -16232,7 +16439,7 @@ exports.decodeManyIntegers = decodeManyIntegers;
   return src;
 });
 
-},{"moment":9}],9:[function(require,module,exports){
+},{"moment":10}],10:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -20836,7 +21043,7 @@ exports.decodeManyIntegers = decodeManyIntegers;
 
 })));
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20923,7 +21130,7 @@ class PostsStorage {
 
 exports.PostsStorage = PostsStorage;
 
-},{"./intcodec.js":6}],11:[function(require,module,exports){
+},{"./intcodec.js":7}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -20981,7 +21188,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21013,7 +21220,84 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ProgressView = void 0;
+
+class ProgressView {
+  constructor(progress_painter, chart_painter) {
+    this._signalHandlers = {};
+    this._div = document.createElement('div');
+    this._progress_painter = progress_painter;
+    this._chart_painter = chart_painter;
+    this._progress_painter.element.style = 'display: block; width: 100%;';
+
+    this._div.appendChild(this._progress_painter.element);
+
+    this._div.appendChild(this._chart_painter.element);
+
+    this._bottom = document.createElement('div');
+    this._cancelBtn = document.createElement('button');
+
+    this._cancelBtn.setAttribute('value', 'Отмена');
+
+    this._cancelBtn.onclick = () => {
+      this._emitSignal('cancel');
+
+      return false;
+    };
+
+    this._log = document.createElement('span');
+
+    this._bottom.appendChild(this._cancelBtn);
+
+    this._bottom.appendChild(this._log);
+
+    this._div.appendChild(this._bottom);
+  }
+
+  _emitSignal(signal) {
+    const fn = this._signalHandlers[signal];
+    if (fn !== undefined) fn();
+  }
+
+  subscribe(signal, fn) {
+    this._signalHandlers[signal] = fn;
+  }
+
+  get element() {
+    return this._div;
+  }
+
+  mount() {
+    this._progress_painter.reset();
+
+    this._chart_painter.reset();
+
+    this._log.innerHTML = '';
+  }
+
+  unmount() {
+    this._progress_painter.reset();
+
+    this._chart_painter.reset();
+
+    this._log.innerHTML = '';
+  }
+
+  setLogContent(html) {
+    this._log.innerHTML = html;
+  }
+
+}
+
+exports.ProgressView = ProgressView;
+
+},{}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21053,12 +21337,19 @@ var _intcodec = require("./intcodec.js");
 //       there is no room for the new value in the storage, an unspecified number of values are
 //       popped _from the front_ of the ordered collection.
 //
-//       This function may or may not actually flush the data to the storage; use
-//       'hasSomethingToFlush()' and 'flush()' methods to query the state of the cache and try to
-//       flush it, respectively.
+//       (!) This function may or may not actually flush the data to the storage; use
+//           'hasSomethingToFlush()' and 'flush()' methods to query the state of the cache and try
+//           to flush it, respectively.
 //
 //   * async read(key)
 //       Returns the ordered collection at the key 'key' as an array of strings.
+//
+//   * async clear()
+//       Clears the entire storage (all the ordered collections).
+//
+//       (!) This function may or may not actually flush the data to the storage; use
+//           'hasSomethingToFlush()' and 'flush()' methods to query the state of the cache and try
+//           to flush it, respectively.
 //
 //   * hasSomethingToFlush()
 //       Returns 'true' if there are any unflushed entries in the cache, 'false' otherwise.
@@ -21068,8 +21359,8 @@ var _intcodec = require("./intcodec.js");
 //
 // A key can only contain ASCII Latin letters (upper- or lowercase), and can not be longer than 90
 // bytes.
-// A value can only contain the printable subset of ASCII, except for the semicolon (';') character,
-// and can not be longer than 512 bytes.
+// A value can only contain the printable subset of ASCII without the semicolon (';') character, and
+// can not be longer than 512 bytes.
 // If any of those requirements is unmet, the behavior is undefined.
 const MIN_DELAY_MILLIS = 3600; // Must be a power of two.
 
@@ -21373,14 +21664,16 @@ class RateLimitedStorage {
     return result;
   }
 
-  async clear(key) {
+  async clear() {
     if (this._timer === null) await this._fetchMetadata();
 
-    const rawKeys = this._getRawKeys(key);
+    for (const key in this._keyToMetadata) for (const rawKey of this._getRawKeys(key)) this._cache.write(rawKey, ''); // Reset the metadata.
 
-    for (const rawKey of rawKeys) this._cache.write(rawKey, '');
 
-    await this._fetchMetadata();
+    const builder = new MetadataBuilder(this._perKeyLimits);
+    const result = builder.finalize();
+    this._keyToMetadata = result.keyToMetadata;
+    this._timer = result.timer;
     await this.flush();
   }
 
@@ -21405,7 +21698,81 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":6,"./utils.js":15,"./vk_api.js":16}],14:[function(require,module,exports){
+},{"./intcodec.js":7,"./utils.js":18,"./vk_api.js":20}],16:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ResultsView = void 0;
+
+var _utils = require("./utils.js");
+
+class ResultsView {
+  constructor() {
+    this._div = document.createElement('div');
+    this._innerDiv = document.createElement('div');
+
+    this._div.appendChild(this._innerDiv);
+  }
+
+  get element() {
+    return this._div;
+  }
+
+  setResults(data) {
+    const newInnerDiv = document.createElement('div');
+
+    if (data.length === 0) {
+      newInnerDiv.innerHTML = 'Ничего не найдено! 😢';
+    } else {
+      newInnerDiv.innerHTML = 'Найдены посты:<br/>';
+      const ul = document.createElement('ul');
+
+      for (const datum of data) {
+        const li = document.createElement('li');
+        const a = (0, _utils.createAnchor)(datum.link);
+        const span = document.createElement('span');
+
+        if (datum.isNew) {
+          span.style = 'font-weight: bold;';
+          span.innerHTML = ' (новый)';
+        } else {
+          span.style = 'color: #999;';
+          span.innerHTML = ' (старый)';
+        }
+
+        li.appendChild(a);
+        li.appendChild(span);
+        ul.appendChild(li);
+      }
+
+      newInnerDiv.appendChild(ul);
+    }
+
+    this._innerDiv.remove();
+
+    this._innerDiv = newInnerDiv;
+  }
+
+  setError(text) {
+    const newInnerDiv = document.createElement('div');
+    newInnerDiv.innerHTML = (0, _utils.htmlEscape)(text);
+
+    this._innerDiv.remove();
+
+    this._innerDiv = newInnerDiv;
+  }
+
+  mount() {}
+
+  unmount() {}
+
+}
+
+exports.ResultsView = ResultsView;
+
+},{"./utils.js":18}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21451,13 +21818,13 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":6}],15:[function(require,module,exports){
+},{"./intcodec.js":7}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.parseSearchString = exports.htmlEscape = exports.unduplicate = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.createAnchor = exports.parseSearchString = exports.htmlEscape = exports.unduplicate = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -21514,7 +21881,55 @@ const parseSearchString = search => {
 
 exports.parseSearchString = parseSearchString;
 
-},{}],16:[function(require,module,exports){
+const createAnchor = link => {
+  const a = document.createElement('a');
+  a.setAttribute('href', link);
+  a.setAttribute('rel', 'noopener noreferrer');
+  a.setAttribute('target', '_blank');
+  a.innerHTML = htmlEscape(link);
+  return a;
+};
+
+exports.createAnchor = createAnchor;
+
+},{}],19:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ViewManager = void 0;
+
+class ViewManager {
+  constructor(rootElement) {
+    this._rootElement = rootElement;
+    this._currentView = null;
+  }
+
+  unshow() {
+    if (this._currentView !== null) {
+      this._currentView.element.remove();
+
+      this._currentView.unmount();
+
+      this._currentView = null;
+    }
+  }
+
+  show(view) {
+    this.unshow();
+    view.mount();
+
+    this._rootElement.appendChild(view.element);
+
+    this._currentView = view;
+  }
+
+}
+
+exports.ViewManager = ViewManager;
+
+},{}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21649,7 +22064,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":15}],17:[function(require,module,exports){
+},{"./utils.js":18}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21780,4 +22195,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":16,"@vkontakte/vk-connect":7}]},{},[5]);
+},{"./vk_api.js":20,"@vkontakte/vk-connect":8}]},{},[6]);
