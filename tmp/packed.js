@@ -640,7 +640,9 @@ class FormView {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._submitBtn = document.createElement('submit');
+    this._submitBtn = document.createElement('input');
+
+    this._submitBtn.setAttribute('type', 'submit');
 
     this._form.appendChild(this._submitBtn);
 
