@@ -357,6 +357,22 @@ class ArchiveView {
   constructor() {
     this._signalHandlers = {};
     this._div = document.createElement('div');
+    this._backBtn = document.createElement('input');
+
+    this._backBtn.setAttribute('type', 'button');
+
+    this._backBtn.setAttribute('value', 'Назад');
+
+    this._backBtn.onclick = () => {
+      this._emitSignal('back');
+
+      return false;
+    };
+
+    this._div.appendChild(this._backBtn);
+
+    this._div.appendChild(document.createElement('hr'));
+
     this._inner = null;
   }
 
@@ -371,23 +387,32 @@ class ArchiveView {
   setData(data) {
     const inner = document.createElement('div');
 
-    for (const [entityId, posts] of data) {
-      inner.appendChild(makeSpanWithHtml('Комментарии '));
-      inner.appendChild((0, _utils.createAnchor)(entityIdToLink(entityId)));
-      inner.appendChild(makeSpanWithHtml(':<br/>'));
-      const ul = document.createElement('ul');
+    if (data.size === 0) {
+      inner.innerHTML = 'Архив пуст.';
+    } else {
+      for (const [entityId, posts] of data) {
+        inner.appendChild(makeSpanWithHtml('Комментарии '));
+        inner.appendChild((0, _utils.createAnchor)(entityIdToLink(entityId)));
+        inner.appendChild(makeSpanWithHtml(':<br/>'));
+        const ul = document.createElement('ul');
 
-      for (const post of posts) {
-        const li = document.createElement('li');
-        const a = (0, _utils.createAnchor)(postDatumToLink(post));
-        li.appendChild(a);
-        ul.appendChild(li);
+        for (const post of posts) {
+          const li = document.createElement('li');
+          const a = (0, _utils.createAnchor)(postDatumToLink(post));
+          li.appendChild(a);
+          ul.appendChild(li);
+        }
+
+        inner.appendChild(ul);
       }
-
-      inner.appendChild(ul);
     }
 
     this._setInner(inner);
+  }
+
+  _emitSignal(signal) {
+    const fn = this._signalHandlers[signal];
+    if (fn !== undefined) fn();
   }
 
   subscribe(signal, fn) {
@@ -654,7 +679,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.FormView = void 0;
 
-const makeDiv = html => {
+const makeDivWithHtml = html => {
   const result = document.createElement('div');
   result.innerHTML = html;
   return result;
@@ -665,7 +690,7 @@ class FormView {
     this._signalHandlers = {};
     this._form = document.createElement('form');
 
-    this._form.appendChild(makeDiv('ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):'));
+    this._form.appendChild(makeDivWithHtml('ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):'));
 
     this._userInput = document.createElement('input');
 
@@ -677,7 +702,7 @@ class FormView {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._form.appendChild(makeDiv('Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или ' + 'переводами строки:'));
+    this._form.appendChild(makeDivWithHtml('Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или ' + 'переводами строки:'));
 
     this._ownersInput = document.createElement('textarea');
 
@@ -703,7 +728,7 @@ class FormView {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._form.appendChild(makeDiv('Ограничение по времени, в днях:'));
+    this._form.appendChild(makeDivWithHtml('Ограничение по времени, в днях:'));
 
     this._timeLimitInput = document.createElement('input');
 
@@ -741,7 +766,7 @@ class FormView {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._log = makeDiv('');
+    this._log = makeDivWithHtml('');
 
     this._form.appendChild(this._log);
 
@@ -1158,198 +1183,9 @@ const asyncMain = async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
   new _vk_transport_connect.VkRequest('VKWebAppInit', {}).schedule();
-  asyncMain().then(() => {}).catch(err => {
+  asyncMain().catch(err => {
     throw err;
   });
-  /*    const resultDiv = document.createElement('div');
-  
-      const workingDiv = document.createElement('div');
-      const archiveDiv = document.createElement('div');
-      const workingText = document.createElement('div');
-      workingText.innerHTML = '…';
-      progressPainter.element.style = 'display: block; width: 100%;';
-      const chartPainter = new ChartPainter();
-      workingDiv.appendChild(progressPainter.element);
-      workingDiv.appendChild(chartPainter.element);
-      workingDiv.appendChild(workingText);
-  
-      const form = document.createElement('form');
-      const formLog = document.createElement('div');
-      const appendInputToForm = (props) => {
-          const elem = document.createElement(props.tag || 'input');
-          if (props.type !== undefined)
-              elem.setAttribute('type', props.type);
-          if (props.required)
-              elem.setAttribute('required', '1');
-          if (props.value !== undefined)
-              elem.setAttribute('value', props.value);
-          if (props.label !== undefined) {
-              const text = document.createElement('div');
-              text.innerHTML = props.label;
-              form.appendChild(text);
-          }
-          form.appendChild(elem);
-          return elem;
-      };
-  
-      const showArchive = async () => {
-          form.remove();
-          body.appendChild(archiveDiv);
-  
-          const waitingText = document.createElement('div');
-          waitingText.innerHTML = htmlEscape('Загрузка архива…');
-          archiveDiv.appendChild(waitingText);
-  
-          await getAccessToken('');
-  
-          const userIds = await postsStorage.getUsers();
-          for (const userId of userIds) {
-              const caption = document.createElement('div');
-              caption.append('Комментарии ');
-              caption.appendChild(createAnchor(resolveIdToLink(userId)));
-              caption.append(':');
-  
-              const ul = document.createElement('ul');
-              for (const datum of await postsStorage.getUserPosts(userId)) {
-                  const a = createAnchor(`https://vk.com/wall${datum.ownerId}_${datum.postId}`);
-                  const li = document.createElement('li');
-                  li.appendChild(a);
-                  ul.appendChild(li);
-              }
-  
-              archiveDiv.appendChild(caption);
-              archiveDiv.appendChild(ul);
-          }
-  
-          waitingText.remove();
-          if (userIds.length === 0) {
-              archiveDiv.append('Архив пуст.');
-          }
-      };
-  
-      const archiveBtn = appendInputToForm({
-          type: 'button',
-          value: 'Архив',
-      });
-      archiveBtn.onclick = () => {
-          showArchive()
-              .then(() => {})
-              .catch((err) => {
-                  formLog.innerHTML = `Ошибка: ${htmlEscape(err.name)}: ${htmlEscape(err.message)}`;
-              });
-          return false;
-      };
-      form.appendChild(document.createElement('hr'));
-  
-      const userIdInput = appendInputToForm({
-          type: 'text',
-          label: 'ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):',
-          required: true,
-      });
-      form.appendChild(document.createElement('hr'));
-      const ownerIdsInput = appendInputToForm({
-          tag: 'textarea',
-          label: 'Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки:',
-          required: true,
-      });
-      form.appendChild(document.createElement('br'));
-      const getSubsBtn = appendInputToForm({
-          type: 'button',
-          value: 'Заполнить подписками пользователя',
-      });
-      getSubsBtn.onclick = () => {
-          getSubscriptions(userIdInput.value)
-              .then((result) => {
-                  if (result.length === 0)
-                      formLog.innerHTML = `Подписок не найдено!`;
-                  ownerIdsInput.value = result.join('\n');
-              })
-              .catch((err) => {
-                  formLog.innerHTML = `Ошибка: ${htmlEscape(err.name)}: ${htmlEscape(err.message)}`;
-              });
-          return false;
-      };
-  
-      form.appendChild(document.createElement('hr'));
-      const timeLimitInput = appendInputToForm({
-          type: 'number',
-          label: 'Ограничение по времени, в днях:',
-          value: '30',
-          required: true,
-      });
-  
-      form.appendChild(document.createElement('hr'));
-      appendInputToForm({type: 'submit'});
-  
-      form.appendChild(document.createElement('hr'));
-      form.appendChild(formLog);
-  
-      formLog.innerHTML = (
-          'Привет! Это — приложение для поиска постов или комментариев определённого пользователя.' +
-          '<br/>' +
-          'Оно использует метод <code>execute()</code>, который позволяет проверить 25 постов за один запрос.');
-  
-      form.onsubmit = () => {
-          const workConfig = {
-              userDomain: userIdInput.value,
-              publicDomains: ownerIdsInput.value
-                  .split(/[,\s]/)
-                  .filter((domain) => domain !== ''),
-              timeLimit: parseFloat(timeLimitInput.value) * 24 * 60 * 60,
-              ignorePinned: false,
-              logText: (text) => {
-                  workingText.innerHTML = htmlEscape(text);
-              },
-              logHTML: (html) => {
-                  workingText.innerHTML = html;
-              },
-          };
-  
-          form.remove();
-          body.appendChild(workingDiv);
-  
-          work(workConfig)
-              .then((result) => {
-                  workingDiv.remove();
-                  body.appendChild(resultDiv);
-  
-                  if (result.length === 0) {
-                      resultDiv.innerHTML = 'Ничего не найдено! 😢';
-                  } else {
-                      resultDiv.innerHTML = 'Найдены посты:<br/>';
-                      const ul = document.createElement('ul');
-                      for (const datum of result) {
-                          const a = createAnchor(datum.link);
-                          const li = document.createElement('li');
-  
-                          const gespan = document.createElement('span');
-                          if (datum.isNew) {
-                              gespan.style = 'font-weight: bold;';
-                              gespan.innerHTML = ' (новый)';
-                          } else {
-                              gespan.style = 'color: #999;';
-                              gespan.innerHTML = ' (старый)';
-                          }
-  
-                          li.appendChild(a);
-                          li.appendChild(gespan);
-                          ul.appendChild(li);
-                      }
-                      resultDiv.appendChild(ul);
-                  }
-              })
-              .catch((err) => {
-                  console.log(err);
-  
-                  workingDiv.remove();
-                  body.appendChild(resultDiv);
-  
-                  resultDiv.innerHTML = `Произошла ошибка: ${htmlEscape(err.name)}: ${htmlEscape(err.message)}`;
-              });
-          return false;
-      };
-  
-      body.appendChild(form);*/
 });
 
 },{"./algo.js":1,"./archive_view.js":2,"./chart_ctl.js":3,"./chart_painter.js":4,"./form_view.js":5,"./global_config.js":6,"./loading_view.js":9,"./posts_storage.js":13,"./progress_estimator.js":14,"./progress_painter.js":15,"./progress_view.js":16,"./rate_limited_storage.js":17,"./results_view.js":18,"./stats_storage.js":19,"./utils.js":20,"./view_mgr.js":21,"./vk_api.js":22,"./vk_transport_connect.js":23}],8:[function(require,module,exports){
@@ -21847,7 +21683,28 @@ class ResultsView {
   constructor() {
     this._signalHandlers = {};
     this._div = document.createElement('div');
+    this._backBtn = document.createElement('input');
+
+    this._backBtn.setAttribute('type', 'button');
+
+    this._backBtn.setAttribute('value', 'Назад');
+
+    this._backBtn.onclick = () => {
+      this._emitSignal('back');
+
+      return false;
+    };
+
+    this._div.appendChild(this._backBtn);
+
+    this._div.appendChild(document.createElement('hr'));
+
     this._inner = null;
+  }
+
+  _emitSignal(signal) {
+    const fn = this._signalHandlers[signal];
+    if (fn !== undefined) fn();
   }
 
   subscribe(signal, fn) {
@@ -22133,7 +21990,7 @@ class VkApiSession {
     await (0, _utils.sleepMillis)(ms);
   }
 
-  setCancel(flag) {
+  setCancelFlag(flag) {
     this._cancelFlag = flag;
   }
 
