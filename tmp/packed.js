@@ -1031,7 +1031,7 @@ const asyncMain = async () => {
       timeLimit: formView.timeLimitSeconds,
       ignorePinned: false,
       logText: text => {
-        formView.setLogContent((0, _utils.htmlEscape)(text));
+        progressView.setLogContent((0, _utils.htmlEscape)(text));
       }
     };
     work(workConfig).then(results => {
@@ -21246,7 +21246,9 @@ class ProgressView {
     this._div.appendChild(this._chart_painter.element);
 
     this._bottom = document.createElement('div');
-    this._cancelBtn = document.createElement('button');
+    this._cancelBtn = document.createElement('input');
+
+    this._cancelBtn.setAttribute('type', 'button');
 
     this._cancelBtn.setAttribute('value', 'Отмена');
 
@@ -21716,22 +21718,27 @@ var _utils = require("./utils.js");
 class ResultsView {
   constructor() {
     this._div = document.createElement('div');
-    this._innerDiv = document.createElement('div');
-
-    this._div.appendChild(this._innerDiv);
+    this._inner = null;
   }
 
   get element() {
     return this._div;
   }
 
+  _setInner(inner) {
+    if (this._inner !== null) this._inner.remove();
+    this._inner = inner;
+
+    this._div.appendChild(inner);
+  }
+
   setResults(data) {
-    const newInnerDiv = document.createElement('div');
+    const inner = document.createElement('div');
 
     if (data.length === 0) {
-      newInnerDiv.innerHTML = 'Ничего не найдено! 😢';
+      inner.innerHTML = 'Ничего не найдено! 😢';
     } else {
-      newInnerDiv.innerHTML = 'Найдены посты:<br/>';
+      inner.innerHTML = 'Найдены посты:<br/>';
       const ul = document.createElement('ul');
 
       for (const datum of data) {
@@ -21752,21 +21759,17 @@ class ResultsView {
         ul.appendChild(li);
       }
 
-      newInnerDiv.appendChild(ul);
+      inner.appendChild(ul);
     }
 
-    this._innerDiv.remove();
-
-    this._innerDiv = newInnerDiv;
+    this._setInner(inner);
   }
 
   setError(text) {
-    const newInnerDiv = document.createElement('div');
-    newInnerDiv.innerHTML = (0, _utils.htmlEscape)(text);
+    const inner = document.createElement('div');
+    inner.innerHTML = (0, _utils.htmlEscape)(text);
 
-    this._innerDiv.remove();
-
-    this._innerDiv = newInnerDiv;
+    this._setInner(inner);
   }
 
   mount() {}
