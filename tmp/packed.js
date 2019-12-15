@@ -373,8 +373,6 @@ class ArchiveView extends _view.View {
 
     this._div.appendChild(this._backBtn);
 
-    this._div.appendChild(document.createElement('hr'));
-
     this._inner = null;
   }
 
@@ -390,7 +388,7 @@ class ArchiveView extends _view.View {
     const inner = document.createElement('div');
 
     if (data.size === 0) {
-      inner.innerHTML = 'Архив пуст.';
+      inner.innerHTML = '<hr/>Архив пуст.';
     } else {
       for (const [entityId, posts] of data) {
         inner.appendChild(document.createElement('hr'));
