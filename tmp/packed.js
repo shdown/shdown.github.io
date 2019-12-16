@@ -4,6 +4,44 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.requestAccessToken = exports.AccessTokenError = void 0;
+
+var _global_config = require("./global_config.js");
+
+var _utils = require("./utils.js");
+
+var _vk_transport_connect = require("./vk_transport_connect.js");
+
+const splitPermissions = s => {
+  return s === '' ? [] : s.split(',');
+};
+
+class AccessTokenError extends Error {
+  constructor(requestedScope, gotScope) {
+    super(`Requested scope '${requestedScope}', got '${gotScope}'`);
+  }
+
+}
+
+exports.AccessTokenError = AccessTokenError;
+
+const requestAccessToken = async scope => {
+  const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
+    app_id: _global_config.GLOBAL_CONFIG.APP_ID,
+    scope: scope
+  });
+  if (!(0, _utils.isSubset)(splitPermissions(scope), splitPermissions(result.scope))) throw AccessTokenError(scope, result.scope);
+  return result.access_token;
+};
+
+exports.requestAccessToken = requestAccessToken;
+
+},{"./global_config.js":7,"./utils.js":21,"./vk_transport_connect.js":25}],2:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
 exports.gatherStats = exports.findPosts = void 0;
 
 var _vk_api = require("./vk_api.js");
@@ -329,7 +367,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":20,"./vk_api.js":23}],2:[function(require,module,exports){
+},{"./utils.js":21,"./vk_api.js":24}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -423,7 +461,7 @@ class ArchiveView extends _view.View {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./utils.js":20,"./view.js":21}],3:[function(require,module,exports){
+},{"./utils.js":21,"./view.js":22}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -504,7 +542,7 @@ class ChartController {
 
 exports.ChartController = ChartController;
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -663,7 +701,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":20,"chart.js":11}],5:[function(require,module,exports){
+},{"./utils.js":21,"chart.js":12}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -805,7 +843,7 @@ class FormView extends _view.View {
 
 exports.FormView = FormView;
 
-},{"./view.js":21}],6:[function(require,module,exports){
+},{"./view.js":22}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -817,12 +855,12 @@ const GLOBAL_CONFIG = {
 };
 exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 
 var _utils = require("./utils.js");
 
-var _global_config = require("./global_config.js");
+var _access_token = require("./access_token.js");
 
 var _vk_transport_connect = require("./vk_transport_connect.js");
 
@@ -863,42 +901,13 @@ const makeCallbackDispatcher = callbacks => {
   };
 };
 
-const requestAccessToken = async scope => {
-  const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
-    app_id: _global_config.GLOBAL_CONFIG.APP_ID,
-    scope: scope
-  });
-
-  const splitPermissions = s => s ? s.split(',') : [];
-
-  const isSubset = (a, b) => new Set([...a, ...b]).size === new Set(b).size;
-
-  if (!isSubset(splitPermissions(scope), splitPermissions(result.scope))) throw new Error(`Requested scope "${scope}", got "${result.scope}"`);
-  return result.access_token;
-};
-
-const installGlobalErrorHandler = () => {
-  const rootDiv = document.getElementById('root');
-
-  window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
-    const span = document.createElement('span');
-    span.innerHTML = (0, _utils.htmlEscape)(`Ошибка: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
-    span.style = 'color: red;';
-    rootDiv.appendChild(span);
-    console.log('Error object:');
-    console.log(errorObj);
-    return false;
-  };
-};
-
 const asyncMain = async () => {
-  installGlobalErrorHandler();
-  const body = document.getElementsByTagName('body')[0];
-  const viewManager = new _view_mgr.ViewManager(body);
+  const rootDiv = document.getElementById('root');
+  const viewManager = new _view_mgr.ViewManager(rootDiv);
   const loadingView = new _loading_view.LoadingView();
   viewManager.show(loadingView);
   const transport = new _vk_transport_connect.Transport();
-  transport.setAccessToken((await requestAccessToken(
+  transport.setAccessToken((await (0, _access_token.requestAccessToken)(
   /*scope=*/
   '')));
   const session = new _vk_api.VkApiSession(transport);
@@ -944,7 +953,6 @@ const asyncMain = async () => {
   };
 
   const getSubscriptions = async userDomain => {
-    session.setRateLimitCallback(null);
     const uid = await resolveDomainToId(userDomain);
     const resp = await session.apiRequest('users.getSubscriptions', {
       user_id: uid,
@@ -1131,10 +1139,12 @@ const asyncMain = async () => {
     };
     work(workConfig).then(results => {
       session.setCancelFlag(false);
+      session.setRateLimitCallback(null);
       viewManager.show(resultsView);
       resultsView.setResults(results);
     }).catch(err => {
       session.setCancelFlag(false);
+      session.setRateLimitCallback(null);
 
       if (err instanceof _vk_api.VkApiCancellation) {
         viewManager.show(formView);
@@ -1166,14 +1176,29 @@ const asyncMain = async () => {
   viewManager.show(formView);
 };
 
+const installGlobalErrorHandler = () => {
+  const rootDiv = document.getElementById('root');
+
+  window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
+    const text = document.createElement('div');
+    text.innerHTML = (0, _utils.htmlEscape)(`Ошибка: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
+    text.style = 'color: red;';
+    rootDiv.prepend(text);
+    console.log('Error object:');
+    console.log(errorObj);
+    return false;
+  };
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+  installGlobalErrorHandler();
   new _vk_transport_connect.VkRequest('VKWebAppInit', {}).schedule();
   asyncMain().catch(err => {
     throw err;
   });
 });
 
-},{"./algo.js":1,"./archive_view.js":2,"./chart_ctl.js":3,"./chart_painter.js":4,"./form_view.js":5,"./global_config.js":6,"./loading_view.js":9,"./posts_storage.js":13,"./progress_estimator.js":14,"./progress_painter.js":15,"./progress_view.js":16,"./rate_limited_storage.js":17,"./results_view.js":18,"./stats_storage.js":19,"./utils.js":20,"./view_mgr.js":22,"./vk_api.js":23,"./vk_transport_connect.js":24}],8:[function(require,module,exports){
+},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./chart_painter.js":5,"./form_view.js":6,"./loading_view.js":10,"./posts_storage.js":14,"./progress_estimator.js":15,"./progress_painter.js":16,"./progress_view.js":17,"./rate_limited_storage.js":18,"./results_view.js":19,"./stats_storage.js":20,"./utils.js":21,"./view_mgr.js":23,"./vk_api.js":24,"./vk_transport_connect.js":25}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1234,7 +1259,7 @@ const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 
 exports.decodeManyIntegers = decodeManyIntegers;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1263,12 +1288,12 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./view.js":21}],10:[function(require,module,exports){
+},{"./view.js":22}],11:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -16402,7 +16427,7 @@ exports.LoadingView = LoadingView;
   return src;
 });
 
-},{"moment":12}],12:[function(require,module,exports){
+},{"moment":13}],13:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -21006,7 +21031,7 @@ exports.LoadingView = LoadingView;
 
 })));
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21093,7 +21118,7 @@ class PostsStorage {
 
 exports.PostsStorage = PostsStorage;
 
-},{"./intcodec.js":8}],14:[function(require,module,exports){
+},{"./intcodec.js":9}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21151,7 +21176,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21183,7 +21208,7 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21250,7 +21275,7 @@ class ProgressView extends _view.View {
 
 exports.ProgressView = ProgressView;
 
-},{"./view.js":21}],17:[function(require,module,exports){
+},{"./view.js":22}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21651,7 +21676,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":8,"./utils.js":20,"./vk_api.js":23}],18:[function(require,module,exports){
+},{"./intcodec.js":9,"./utils.js":21,"./vk_api.js":24}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21745,7 +21770,7 @@ class ResultsView extends _view.View {
 
 exports.ResultsView = ResultsView;
 
-},{"./utils.js":20,"./view.js":21}],19:[function(require,module,exports){
+},{"./utils.js":21,"./view.js":22}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21791,13 +21816,13 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":8}],20:[function(require,module,exports){
+},{"./intcodec.js":9}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.createAnchor = exports.parseSearchString = exports.htmlEscape = exports.unduplicate = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.createAnchor = exports.parseSearchString = exports.htmlEscape = exports.unduplicate = exports.isSubset = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -21816,6 +21841,14 @@ const clearArray = array => {
 };
 
 exports.clearArray = clearArray;
+
+const isSubset = (a, b) => {
+  const unionSet = new Set([...a, ...b]);
+  const bSet = new Set(b);
+  return unionSet.size === bSet.size;
+};
+
+exports.isSubset = isSubset;
 
 const unduplicate = array => [...new Set(array)];
 
@@ -21865,7 +21898,7 @@ const createAnchor = link => {
 
 exports.createAnchor = createAnchor;
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21891,7 +21924,7 @@ class View {
 
 exports.View = View;
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21928,7 +21961,7 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22063,7 +22096,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":20}],24:[function(require,module,exports){
+},{"./utils.js":21}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22194,4 +22227,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":23,"@vkontakte/vk-connect":10}]},{},[7]);
+},{"./vk_api.js":24,"@vkontakte/vk-connect":11}]},{},[8]);
