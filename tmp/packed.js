@@ -21537,6 +21537,7 @@ class MetadataBuilder {
     }
 
     if (metadata.lastIndex < index) metadata.lastIndex = index;
+    if (this._timer < timer) this._timer = timer;
   }
 
   finalize() {
