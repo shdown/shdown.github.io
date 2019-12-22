@@ -36,7 +36,7 @@ const requestAccessToken = async scope => {
 
 exports.requestAccessToken = requestAccessToken;
 
-},{"./global_config.js":7,"./utils.js":21,"./vk_transport_connect.js":25}],2:[function(require,module,exports){
+},{"./global_config.js":8,"./utils.js":22,"./vk_transport_connect.js":26}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -366,7 +366,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":21,"./vk_api.js":24}],3:[function(require,module,exports){
+},{"./utils.js":22,"./vk_api.js":25}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -378,18 +378,14 @@ var _view = require("./view.js");
 
 var _utils = require("./utils.js");
 
+var _gettext = require("./gettext.js");
+
 const entityIdToLink = id => {
   if (id < 0) return `https://vk.com/public${-id}`;else return `https://vk.com/id${id}`;
 };
 
 const postDatumToLink = datum => {
   return `https://vk.com/wall${datum.ownerId}_${datum.postId}`;
-};
-
-const makeSpanWithHtml = html => {
-  const span = document.createElement('span');
-  span.innerHTML = html;
-  return span;
 };
 
 class ArchiveView extends _view.View {
@@ -400,7 +396,7 @@ class ArchiveView extends _view.View {
 
     this._backBtn.setAttribute('type', 'button');
 
-    this._backBtn.setAttribute('value', 'Назад');
+    this._backBtn.setAttribute('value', (0, _gettext.__)('Back'));
 
     this._backBtn.onclick = () => {
       super._emitSignal('back');
@@ -425,13 +421,14 @@ class ArchiveView extends _view.View {
     const inner = document.createElement('div');
 
     if (data.size === 0) {
-      inner.innerHTML = '<hr/>Архив пуст.';
+      inner.appendChild(document.createElement('hr'));
+      inner.append((0, _gettext.__)('Archive is empty.'));
     } else {
       for (const [entityId, posts] of data) {
         inner.appendChild(document.createElement('hr'));
-        inner.appendChild(makeSpanWithHtml('Комментарии '));
         inner.appendChild((0, _utils.createAnchor)(entityIdToLink(entityId)));
-        inner.appendChild(makeSpanWithHtml(':<br/>'));
+        inner.append(':');
+        inner.appendChild(document.createElement('br'));
         const ul = document.createElement('ul');
 
         for (const post of posts) {
@@ -460,7 +457,7 @@ class ArchiveView extends _view.View {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./utils.js":21,"./view.js":22}],4:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -700,7 +697,7 @@ class ChartPainter {
 
 exports.ChartPainter = ChartPainter;
 
-},{"./utils.js":21,"chart.js":12}],6:[function(require,module,exports){
+},{"./utils.js":22,"chart.js":13}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -710,18 +707,16 @@ exports.FormView = void 0;
 
 var _view = require("./view.js");
 
-const makeDivWithHtml = html => {
-  const result = document.createElement('div');
-  result.innerHTML = html;
-  return result;
-};
+var _utils = require("./utils.js");
+
+var _gettext = require("./gettext.js");
 
 class FormView extends _view.View {
   constructor() {
     super();
     this._form = document.createElement('form');
 
-    this._form.appendChild(makeDivWithHtml('ID пользователя или адрес страницы (например, <b>1</b> или <b>durov</b>):'));
+    this._form.append((0, _gettext.__)('User ID or handle (for example, “1” or “durov”):'));
 
     this._userInput = document.createElement('input');
 
@@ -733,7 +728,7 @@ class FormView extends _view.View {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._form.appendChild(makeDivWithHtml('Список пабликов, ID или адреса страниц; разделяйте запятыми, пробелами или ' + 'переводами строки:'));
+    this._form.append((0, _gettext.__)('Public list (IDs or handles); separate with commas, spaces or line feeds:'));
 
     this._ownersInput = document.createElement('textarea');
 
@@ -745,7 +740,7 @@ class FormView extends _view.View {
 
     this._getSubsBtn.setAttribute('type', 'button');
 
-    this._getSubsBtn.setAttribute('value', 'Заполнить подписками пользователя');
+    this._getSubsBtn.setAttribute('value', (0, _gettext.__)('Fill with user subscriptions'));
 
     this._getSubsBtn.style = 'display: block;';
 
@@ -759,7 +754,7 @@ class FormView extends _view.View {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._form.appendChild(makeDivWithHtml('Ограничение по времени, в днях:'));
+    this._form.append((0, _gettext.__)('Time limit, days:'));
 
     this._timeLimitInput = document.createElement('input');
 
@@ -777,7 +772,7 @@ class FormView extends _view.View {
 
     this._submitBtn.setAttribute('type', 'submit');
 
-    this._submitBtn.setAttribute('value', 'Найти!');
+    this._submitBtn.setAttribute('value', (0, _gettext.__)('Find!'));
 
     this._form.appendChild(this._submitBtn);
 
@@ -785,7 +780,7 @@ class FormView extends _view.View {
 
     this._archiveBtn.setAttribute('type', 'button');
 
-    this._archiveBtn.setAttribute('value', 'Архив');
+    this._archiveBtn.setAttribute('value', (0, _gettext.__)('Archive'));
 
     this._archiveBtn.onclick = () => {
       super._emitSignal('open-archive');
@@ -797,7 +792,7 @@ class FormView extends _view.View {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._log = makeDivWithHtml('');
+    this._log = document.createElement('div');
 
     this._form.appendChild(this._log);
 
@@ -829,7 +824,7 @@ class FormView extends _view.View {
   }
 
   mount() {
-    this._log.innerHTML = 'Привет! Это — приложение для поиска постов или комментариев определённого ' + 'пользователя. <br/> Оно использует метод <code>execute()</code>, который позволяет ' + 'проверить 25 постов за один запрос.';
+    this._log.innerHTML = (0, _utils.htmlEscape)((0, _gettext.__)('Hello! This app can find posts made by a specific user.')) + '</br>' + (0, _utils.htmlEscape)((0, _gettext.__)('It uses the execute() method, which allows to check 25 posts per ' + 'request.'));
   }
 
   unmount() {}
@@ -842,7 +837,35 @@ class FormView extends _view.View {
 
 exports.FormView = FormView;
 
-},{"./view.js":22}],7:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],7:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.__ = void 0;
+const translations = {
+  ru: {}
+};
+
+const selectTranslation = langTag => {
+  if (typeof langTag !== 'string') return undefined;
+  const m = langTag.match(/^[a-zA-Z]+/);
+  if (m === null) return undefined;
+  return translations[m[0]];
+};
+
+const translation = selectTranslation(navigator.language || navigator.userLanguage) || {};
+
+const __ = (text, ...args) => {
+  let pattern = translation[text];
+  if (pattern === undefined) pattern = text;
+  return pattern.replace(/{([0-9]+)}/g, m => args[m[1]]);
+};
+
+exports.__ = __;
+
+},{}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -854,8 +877,10 @@ const GLOBAL_CONFIG = {
 };
 exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
+
+var _gettext = require("./gettext.js");
 
 var _utils = require("./utils.js");
 
@@ -1000,25 +1025,25 @@ const asyncMain = async () => {
   };
 
   const work = async workConfig => {
-    workConfig.logText('Получаю токен…');
+    workConfig.logText((0, _gettext.__)('Getting access token…'));
     session.setRateLimitCallback(reason => {
-      workConfig.logText(`Умерим пыл (${reason})`);
+      workConfig.logText((0, _gettext.__)('We are being too fast ({0})', reason));
     });
-    workConfig.logText('Получаю время сервера…');
+    workConfig.logText((0, _gettext.__)('Getting server time…'));
     const serverTime = await session.apiRequest('utils.getServerTime', {
       v: '5.101'
     });
     const timeLimit = workConfig.timeLimit;
     const sinceTimestamp = serverTime - timeLimit;
-    workConfig.logText('Проверяю пользователя…');
+    workConfig.logText((0, _gettext.__)('Checking user…'));
     const uid = await resolveDomainToId(workConfig.userDomain);
-    workConfig.logText('Проверяю список пабликов…');
+    workConfig.logText((0, _gettext.__)('Checking public list…'));
     let oids = [];
 
     for (const domain of workConfig.publicDomains) oids.push((await resolveDomainToId(domain)));
 
     oids = (0, _utils.unduplicate)(oids);
-    workConfig.logText('Собираю статистику…');
+    workConfig.logText((0, _gettext.__)('Gathering statistics…'));
     const stats = await resolveStatsFor(oids, {
       ignorePinned: workConfig.ignorePinned
     });
@@ -1033,7 +1058,9 @@ const asyncMain = async () => {
       const oid = oids[i];
       const stat = stats[oid];
       if (stat === undefined) continue;
-      workConfig.logText(result.length === 0 ? `Ищу в ${i + 1}/${oids.length}` : `Ищу в ${i + 1}/${oids.length} (найдено ${result.length})`);
+      let statusText = (0, _gettext.__)('Searching in {0}/{1}…', `${i + 1}`, `${oids.length}`);
+      if (result.length !== 0) statusText += (0, _gettext.__)(' (found {0})', `${result.length}`);
+      workConfig.logText(statusText);
       implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stat, timeLimit);
       const estimator = new _progress_estimator.ProgressEstimator();
       chartPainter.reset();
@@ -1051,7 +1078,7 @@ const asyncMain = async () => {
             offset: datum.offset,
             isNew: isNew
           });
-          workConfig.logText(`Найдено: ${link}`);
+          workConfig.logText((0, _gettext.__)('Found: {0}', link));
         },
         infoAdd: async datum => {
           chartCtl.handleAdd(datum);
@@ -1077,7 +1104,7 @@ const asyncMain = async () => {
         },
         error: async datum => {
           const error = datum.error;
-          workConfig.logText(`Ошибка при проверке ${oid}_${datum.postId}: ${error.name}: ${error.message}`);
+          workConfig.logText((0, _gettext.__)('Error checking {0}: {1}', `${oid}_${datum.postId}`, `${error.name}: ${error.message}`));
           console.log('error callback payload:');
           console.log(error);
         }
@@ -1100,7 +1127,7 @@ const asyncMain = async () => {
     }
 
     while (storage.hasSomethingToFlush()) {
-      workConfig.logText('Сохраняю результаты…');
+      workConfig.logText((0, _gettext.__)('Saving results…'));
       await (0, _utils.sleepMillis)(200);
       await storage.flush();
     }
@@ -1119,10 +1146,10 @@ const asyncMain = async () => {
 
   formView.subscribe('get-subs', () => {
     getSubscriptions(formView.userDomain).then(data => {
-      if (data.length === 0) formView.setLogContent('Подписок не найдено!');
+      if (data.length === 0) formView.setLogContent((0, _gettext.__)('No subscriptions found!'));
       formView.ownerDomains = data;
     }).catch(err => {
-      formView.setLogContent((0, _utils.htmlEscape)(`Ошибка: ${err.name}: ${err.message}`));
+      formView.setLogContent((0, _utils.htmlEscape)((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`)));
     });
   });
   formView.subscribe('submit', () => {
@@ -1149,7 +1176,7 @@ const asyncMain = async () => {
         viewManager.show(formView);
       } else {
         viewManager.show(resultsView);
-        resultsView.setError(`Ошибка: ${err.name}: ${err.message}`);
+        resultsView.setError((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`));
       }
     });
   });
@@ -1160,7 +1187,7 @@ const asyncMain = async () => {
       archiveView.setData(data);
     }).catch(err => {
       viewManager.show(formView);
-      formView.setLogContent((0, _utils.htmlEscape)(`Ошибка: ${err.name}: ${err.message}`));
+      formView.setLogContent((0, _utils.htmlEscape)((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`)));
     });
   });
   archiveView.subscribe('back', () => {
@@ -1180,7 +1207,7 @@ const installGlobalErrorHandler = () => {
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
     const text = document.createElement('div');
-    text.innerHTML = (0, _utils.htmlEscape)(`Ошибка: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
+    text.innerHTML = (0, _utils.htmlEscape)(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
     text.style = 'color: red;';
     rootDiv.prepend(text);
     console.log('Error object:');
@@ -1197,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./chart_painter.js":5,"./form_view.js":6,"./loading_view.js":10,"./posts_storage.js":14,"./progress_estimator.js":15,"./progress_painter.js":16,"./progress_view.js":17,"./rate_limited_storage.js":18,"./results_view.js":19,"./stats_storage.js":20,"./utils.js":21,"./view_mgr.js":23,"./vk_api.js":24,"./vk_transport_connect.js":25}],9:[function(require,module,exports){
+},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./chart_painter.js":5,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_painter.js":17,"./progress_view.js":18,"./rate_limited_storage.js":19,"./results_view.js":20,"./stats_storage.js":21,"./utils.js":22,"./view_mgr.js":24,"./vk_api.js":25,"./vk_transport_connect.js":26}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1258,7 +1285,7 @@ const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 
 exports.decodeManyIntegers = decodeManyIntegers;
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1268,11 +1295,14 @@ exports.LoadingView = void 0;
 
 var _view = require("./view.js");
 
+var _gettext = require("./gettext.js");
+
 class LoadingView extends _view.View {
   constructor() {
     super();
     this._div = document.createElement('div');
-    this._div.innerHTML = 'Загрузка…';
+
+    this._div.append((0, _gettext.__)('Loading…'));
   }
 
   get element() {
@@ -1287,12 +1317,12 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./view.js":22}],11:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":23}],12:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -16426,7 +16456,7 @@ exports.LoadingView = LoadingView;
   return src;
 });
 
-},{"moment":13}],13:[function(require,module,exports){
+},{"moment":14}],14:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -21030,7 +21060,7 @@ exports.LoadingView = LoadingView;
 
 })));
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21117,7 +21147,7 @@ class PostsStorage {
 
 exports.PostsStorage = PostsStorage;
 
-},{"./intcodec.js":9}],15:[function(require,module,exports){
+},{"./intcodec.js":10}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21175,7 +21205,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21207,7 +21237,7 @@ class ProgressPainter {
 
 exports.ProgressPainter = ProgressPainter;
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21216,6 +21246,8 @@ Object.defineProperty(exports, "__esModule", {
 exports.ProgressView = void 0;
 
 var _view = require("./view.js");
+
+var _gettext = require("./gettext.js");
 
 class ProgressView extends _view.View {
   constructor(progress_painter, chart_painter) {
@@ -21234,7 +21266,7 @@ class ProgressView extends _view.View {
 
     this._cancelBtn.setAttribute('type', 'button');
 
-    this._cancelBtn.setAttribute('value', 'Отмена');
+    this._cancelBtn.setAttribute('value', (0, _gettext.__)('Cancel'));
 
     this._cancelBtn.onclick = () => {
       super._emitSignal('cancel');
@@ -21274,7 +21306,7 @@ class ProgressView extends _view.View {
 
 exports.ProgressView = ProgressView;
 
-},{"./view.js":22}],18:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":23}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21676,7 +21708,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":9,"./utils.js":21,"./vk_api.js":24}],19:[function(require,module,exports){
+},{"./intcodec.js":10,"./utils.js":22,"./vk_api.js":25}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21688,6 +21720,8 @@ var _view = require("./view.js");
 
 var _utils = require("./utils.js");
 
+var _gettext = require("./gettext.js");
+
 class ResultsView extends _view.View {
   constructor() {
     super();
@@ -21696,7 +21730,7 @@ class ResultsView extends _view.View {
 
     this._backBtn.setAttribute('type', 'button');
 
-    this._backBtn.setAttribute('value', 'Назад');
+    this._backBtn.setAttribute('value', (0, _gettext.__)('Back'));
 
     this._backBtn.onclick = () => {
       super._emitSignal('back');
@@ -21726,9 +21760,10 @@ class ResultsView extends _view.View {
     const inner = document.createElement('div');
 
     if (data.length === 0) {
-      inner.innerHTML = 'Ничего не найдено! 😢';
+      inner.append((0, _gettext.__)('Nothing found! 😢'));
     } else {
-      inner.innerHTML = 'Найдены посты:<br/>';
+      inner.append((0, _gettext.__)('Posts founds:'));
+      inner.appendChild(document.createElement('br'));
       const ul = document.createElement('ul');
 
       for (const datum of data) {
@@ -21738,10 +21773,10 @@ class ResultsView extends _view.View {
 
         if (datum.isNew) {
           span.style = 'font-weight: bold;';
-          span.innerHTML = ' (новый)';
+          span.append((0, _gettext.__)(' (new)'));
         } else {
           span.style = 'color: #999;';
-          span.innerHTML = ' (старый)';
+          span.append((0, _gettext.__)(' (old)'));
         }
 
         li.appendChild(a);
@@ -21770,7 +21805,7 @@ class ResultsView extends _view.View {
 
 exports.ResultsView = ResultsView;
 
-},{"./utils.js":21,"./view.js":22}],20:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21816,7 +21851,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":9}],21:[function(require,module,exports){
+},{"./intcodec.js":10}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21898,7 +21933,7 @@ const createAnchor = link => {
 
 exports.createAnchor = createAnchor;
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21924,7 +21959,7 @@ class View {
 
 exports.View = View;
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21961,7 +21996,7 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22096,7 +22131,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":21}],25:[function(require,module,exports){
+},{"./utils.js":22}],26:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22227,4 +22262,4 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":24,"@vkontakte/vk-connect":11}]},{},[8]);
+},{"./vk_api.js":25,"@vkontakte/vk-connect":12}]},{},[9]);
