@@ -858,7 +858,25 @@ const translations = {
     'Find!': 'Найти!',
     'Archive': 'Архив',
     'Hello! This app can find posts made by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
-    'It uses the execute() method, which allows checking 25 posts per request': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.'
+    'It uses the execute() method, which allows checking 25 posts per request': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
+    'We are being too fast ({0})': 'Умерим пыл ({0})',
+    'Getting server time…': 'Получаю время сервера…',
+    'Checking user…': 'Проверяю пользователя…',
+    'Checking public list…': 'Проверяю список пабликов…',
+    'Gathering statistics…': 'Собираю статистику…',
+    'Searching in {0}/{1}…': 'Ищу в {0}/{1}…',
+    '  (found {0})': ' (найдено {0})',
+    'Found: {0}': 'Найдено: {0}',
+    'Error checking {0}: {1}': 'Ошибка при проверке {0}: {1}',
+    'Saving results…': 'Сохраняю результаты…',
+    'No subscriptions found!': 'Подписок не найдено!',
+    'Error: {0}': 'Ошибка: {0}',
+    'Loading…': 'Загрузка…',
+    'Cancel': 'Отмена',
+    'Nothing found! 😢': 'Ничего не найдено! 😢',
+    'Posts founds:': 'Найдены посты:',
+    ' (new)': ' (новый)',
+    ' (old)': ' (старый)'
   }
 };
 
@@ -1041,7 +1059,6 @@ const asyncMain = async () => {
   };
 
   const work = async workConfig => {
-    workConfig.logText((0, _gettext.__)('Getting access token…'));
     session.setRateLimitCallback(reason => {
       workConfig.logText((0, _gettext.__)('We are being too fast ({0})', reason));
     });
