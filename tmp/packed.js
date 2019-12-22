@@ -711,12 +711,18 @@ var _utils = require("./utils.js");
 
 var _gettext = require("./gettext.js");
 
+const createDiv = text => {
+  const div = document.createElement('div');
+  div.append(text);
+  return div;
+};
+
 class FormView extends _view.View {
   constructor() {
     super();
     this._form = document.createElement('form');
 
-    this._form.append((0, _gettext.__)('User ID or handle (for example, “1” or “durov”):'));
+    this._form.appendChild(createDiv((0, _gettext.__)('User ID or handle (for example, “1” or “durov”):')));
 
     this._userInput = document.createElement('input');
 
@@ -728,7 +734,7 @@ class FormView extends _view.View {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._form.append((0, _gettext.__)('Public list (IDs or handles); separate with commas, spaces or line feeds:'));
+    this._form.appendChild(createDiv((0, _gettext.__)('Public list (IDs or handles); separate with commas, spaces or line feeds:')));
 
     this._ownersInput = document.createElement('textarea');
 
@@ -754,7 +760,7 @@ class FormView extends _view.View {
 
     this._form.appendChild(document.createElement('hr'));
 
-    this._form.append((0, _gettext.__)('Time limit, days:'));
+    this._form.appendChild(createDiv((0, _gettext.__)('Time limit, days:')));
 
     this._timeLimitInput = document.createElement('input');
 
@@ -824,7 +830,11 @@ class FormView extends _view.View {
   }
 
   mount() {
-    this._log.innerHTML = (0, _utils.htmlEscape)((0, _gettext.__)('Hello! This app can find posts made by a specific user.')) + '</br>' + (0, _utils.htmlEscape)((0, _gettext.__)('It uses the execute() method, which allows to check 25 posts per ' + 'request.'));
+    this._log.innerHTML = '';
+
+    this._log.appendChild(createDiv((0, _gettext.__)('Hello! This app can find posts made by a specific user.')));
+
+    this._log.appendChild(createDiv((0, _gettext.__)('It uses the execute() method, which allows to check 25 posts per request')));
   }
 
   unmount() {}
