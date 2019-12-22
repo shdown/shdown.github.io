@@ -21314,8 +21314,10 @@ class ProgressView extends _view.View {
     this._log.innerHTML = '';
   }
 
-  setLogContent(html) {
-    this._log.innerHTML = html;
+  setLogText(text) {
+    this._log.innerHTML = '';
+
+    this._log.append(text);
   }
 
 }
