@@ -302,17 +302,35 @@ const findPosts = async config => {
 exports.findPosts = findPosts;
 
 const gatherStatsBatch = async (config, batch, result) => {
-  let code = `var i = 0, r = [];`;
-  code += `var d = [${batch.join(',')}];`;
-  code += `while (i < ${batch.length}) {`;
-  code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${MAX_POSTS}}));`;
-  code += ` i = i + 1;`;
-  code += `}`;
-  code += `return r;`;
-  const executeResult = await foolProofExecute(config, {
-    code: code,
-    v: '5.101'
-  });
+  const COUNTS = [100, 50, 25, 13, 7, 4, 2];
+  let executeResult;
+
+  for (let i = 0;;) {
+    let code = `var i = 0, r = [];`;
+    code += `var d = [${batch.join(',')}];`;
+    code += `while (i < ${batch.length}) {`;
+    code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${COUNTS[i]}}));`;
+    code += ` i = i + 1;`;
+    code += `}`;
+    code += `return r;`;
+
+    try {
+      executeResult = await foolProofExecute(config, {
+        code: code,
+        v: '5.101'
+      });
+      break;
+    } catch (err) {
+      if (!(err instanceof _vk_api.VkApiError)) throw err;
+      if (err.code !== 13) throw err;
+      await config.callback('error', {
+        error: err
+      });
+      ++i;
+      if (i === COUNTS.length) throw err;
+      continue;
+    }
+  }
 
   for (let i = 0; i < batch.length; ++i) {
     const ownerDatum = executeResult[i];
@@ -1051,6 +1069,10 @@ const asyncMain = async () => {
       callback: makeCallbackDispatcher({
         progress: async datum => {
           progressView.setProgress(datum.numerator / datum.denominator);
+        },
+        error: async datum => {
+          const error = datum.error;
+          resolveConfig.logText((0, _gettext.__)('Error gathering statistics: {0}', `${error.name}: ${error.message}`));
         }
       })
     });
@@ -21978,13 +22000,15 @@ class View {
     this._signalHandlers = {};
   }
 
-  subscribe(signal, fn) {
-    this._signalHandlers[signal] = fn;
+  subscribe(signal, f) {
+    let fs = this._signalHandlers[signal];
+    if (fs === undefined) fs = this._signalHandlers[signal] = [];
+    fs.push(f);
   }
 
   _emitSignal(signal) {
-    const fn = this._signalHandlers[signal];
-    if (fn !== undefined) fn();
+    const fs = this._signalHandlers[signal];
+    if (fs !== undefined) for (const f of fs) f();
   }
 
 }
