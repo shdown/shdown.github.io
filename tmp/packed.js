@@ -52,8 +52,6 @@ const MAX_POSTS = 100;
 const MAX_COMMENTS = 100;
 const MAX_REQUESTS_IN_EXECUTE = 25;
 
-const isEPERM = err => err.code === 7;
-
 class Reader {
   constructor(config) {
     this._config = config;
@@ -376,17 +374,11 @@ exports.ArchiveView = void 0;
 
 var _view = require("./view.js");
 
+var _vk_url = require("./vk_url.js");
+
 var _utils = require("./utils.js");
 
 var _gettext = require("./gettext.js");
-
-const entityIdToLink = id => {
-  if (id < 0) return `https://vk.com/public${-id}`;else return `https://vk.com/id${id}`;
-};
-
-const postDatumToLink = datum => {
-  return `https://vk.com/wall${datum.ownerId}_${datum.postId}`;
-};
 
 class ArchiveView extends _view.View {
   constructor() {
@@ -424,16 +416,16 @@ class ArchiveView extends _view.View {
       inner.appendChild(document.createElement('hr'));
       inner.append((0, _gettext.__)('Archive is empty.'));
     } else {
-      for (const [entityId, posts] of data) {
+      for (const [entityId, postData] of data) {
         inner.appendChild(document.createElement('hr'));
-        inner.appendChild((0, _utils.createAnchor)(entityIdToLink(entityId)));
+        inner.appendChild((0, _utils.createAnchor)((0, _vk_url.vkEntityUrl)(entityId)));
         inner.append(':');
         inner.appendChild(document.createElement('br'));
         const ul = document.createElement('ul');
 
-        for (const post of posts) {
+        for (const postDatum of postData) {
           const li = document.createElement('li');
-          const a = (0, _utils.createAnchor)(postDatumToLink(post));
+          const a = (0, _utils.createAnchor)((0, _vk_url.vkPostUrl)(postDatum.ownerId, postDatum.postId));
           li.appendChild(a);
           ul.appendChild(li);
         }
@@ -457,7 +449,7 @@ class ArchiveView extends _view.View {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],4:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23,"./vk_url.js":27}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -707,8 +699,6 @@ exports.FormView = void 0;
 
 var _view = require("./view.js");
 
-var _utils = require("./utils.js");
-
 var _gettext = require("./gettext.js");
 
 const createDiv = text => {
@@ -834,20 +824,22 @@ class FormView extends _view.View {
 
     this._log.appendChild(createDiv((0, _gettext.__)('Hello! This app can find posts made by a specific user.')));
 
-    this._log.appendChild(createDiv((0, _gettext.__)('It uses the execute() method, which allows to check 25 posts per request')));
+    this._log.appendChild(createDiv((0, _gettext.__)('It uses the execute() method, which allows checking 25 posts per request')));
   }
 
   unmount() {}
 
-  setLogContent(html) {
-    this._log.innerHTML = html;
+  setLogText(text) {
+    this._log.innerHTML = '';
+
+    this._log.append(text);
   }
 
 }
 
 exports.FormView = FormView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],7:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":23}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -855,7 +847,19 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.__ = void 0;
 const translations = {
-  ru: {}
+  ru: {
+    'Loading…': 'Загрузка…',
+    'Back': 'Назад',
+    'Archive is empty.': 'Архив пуст.',
+    'User ID or handle (for example, “1” or “durov”):': 'ID пользователя или адрес страницы (например, “1” или “durov”):',
+    'Public list (IDs or handles); separate with commas, spaces or line feeds:': 'Список пабликов (ID или адреса страниц); разделяйте запятыми, пробелами или переводами строки:',
+    'Fill with user subscriptions': 'Заполнить подписками пользователя',
+    'Time limit, days:': 'Ограничение по времени, в днях:',
+    'Find!': 'Найти!',
+    'Archive': 'Архив',
+    'Hello! This app can find posts made by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
+    'It uses the execute() method, which allows checking 25 posts per request': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.'
+  }
 };
 
 const selectTranslation = langTag => {
@@ -927,6 +931,8 @@ var _progress_view = require("./progress_view.js");
 var _results_view = require("./results_view.js");
 
 var _archive_view = require("./archive_view.js");
+
+var _vk_url = require("./vk_url.js");
 
 const makeCallbackDispatcher = callbacks => {
   return async (what, arg) => {
@@ -1077,7 +1083,7 @@ const asyncMain = async () => {
       const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
       const callbacks = {
         found: async datum => {
-          const link = `https://vk.com/wall${oid}_${datum.postId}`;
+          const link = (0, _vk_url.vkPostUrl)(oid, datum.postId);
           const isNew = await postsStorage.addPost(uid, {
             ownerId: oid,
             postId: datum.postId,
@@ -1156,10 +1162,10 @@ const asyncMain = async () => {
 
   formView.subscribe('get-subs', () => {
     getSubscriptions(formView.userDomain).then(data => {
-      if (data.length === 0) formView.setLogContent((0, _gettext.__)('No subscriptions found!'));
+      if (data.length === 0) formView.setLogText((0, _gettext.__)('No subscriptions found!'));
       formView.ownerDomains = data;
     }).catch(err => {
-      formView.setLogContent((0, _utils.htmlEscape)((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`)));
+      formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`));
     });
   });
   formView.subscribe('submit', () => {
@@ -1170,7 +1176,7 @@ const asyncMain = async () => {
       timeLimit: formView.timeLimitSeconds,
       ignorePinned: false,
       logText: text => {
-        progressView.setLogContent((0, _utils.htmlEscape)(text));
+        progressView.setLogText(text);
       }
     };
     work(workConfig).then(results => {
@@ -1197,7 +1203,7 @@ const asyncMain = async () => {
       archiveView.setData(data);
     }).catch(err => {
       viewManager.show(formView);
-      formView.setLogContent((0, _utils.htmlEscape)((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`)));
+      formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`));
     });
   });
   archiveView.subscribe('back', () => {
@@ -1217,7 +1223,7 @@ const installGlobalErrorHandler = () => {
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
     const text = document.createElement('div');
-    text.innerHTML = (0, _utils.htmlEscape)(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
+    text.append(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
     text.style = 'color: red;';
     rootDiv.prepend(text);
     console.log('Error object:');
@@ -1234,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./chart_painter.js":5,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_painter.js":17,"./progress_view.js":18,"./rate_limited_storage.js":19,"./results_view.js":20,"./stats_storage.js":21,"./utils.js":22,"./view_mgr.js":24,"./vk_api.js":25,"./vk_transport_connect.js":26}],10:[function(require,module,exports){
+},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./chart_painter.js":5,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_painter.js":17,"./progress_view.js":18,"./rate_limited_storage.js":19,"./results_view.js":20,"./stats_storage.js":21,"./utils.js":22,"./view_mgr.js":24,"./vk_api.js":25,"./vk_transport_connect.js":26,"./vk_url.js":27}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21802,7 +21808,7 @@ class ResultsView extends _view.View {
 
   setError(text) {
     const inner = document.createElement('div');
-    inner.innerHTML = (0, _utils.htmlEscape)(text);
+    inner.append(text);
 
     this._setInner(inner);
   }
@@ -21937,7 +21943,7 @@ const createAnchor = link => {
   a.setAttribute('href', link);
   a.setAttribute('rel', 'noopener noreferrer');
   a.setAttribute('target', '_blank');
-  a.innerHTML = htmlEscape(link);
+  a.append(link);
   return a;
 };
 
@@ -22272,4 +22278,24 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":25,"@vkontakte/vk-connect":12}]},{},[9]);
+},{"./vk_api.js":25,"@vkontakte/vk-connect":12}],27:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.vkPostUrl = exports.vkEntityUrl = void 0;
+
+const vkEntityUrl = id => {
+  if (id < 0) return `https://vk.com/public${-id}`;else return `https://vk.com/id${id}`;
+};
+
+exports.vkEntityUrl = vkEntityUrl;
+
+const vkPostUrl = (ownerId, postId) => {
+  return `https://vk.com/wall${ownerId}_${postId}`;
+};
+
+exports.vkPostUrl = vkPostUrl;
+
+},{}]},{},[9]);
