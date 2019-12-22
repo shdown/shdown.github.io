@@ -36,7 +36,7 @@ const requestAccessToken = async scope => {
 
 exports.requestAccessToken = requestAccessToken;
 
-},{"./global_config.js":8,"./utils.js":22,"./vk_transport_connect.js":26}],2:[function(require,module,exports){
+},{"./global_config.js":8,"./utils.js":21,"./vk_transport_connect.js":25}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -364,7 +364,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":22,"./vk_api.js":25}],3:[function(require,module,exports){
+},{"./utils.js":21,"./vk_api.js":24}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -450,7 +450,7 @@ class ArchiveView extends _view.View {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23,"./vk_url.js":27}],4:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":21,"./view.js":22,"./vk_url.js":26}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -459,8 +459,11 @@ Object.defineProperty(exports, "__esModule", {
 exports.ChartController = void 0;
 
 class ChartController {
-  constructor(maxBarsNum, painter) {
-    this._painter = painter;
+  constructor(maxBarsNum, chartView) {
+    this._chartView = chartView;
+
+    this._chartView.reset();
+
     this._bars = Array(maxBarsNum).fill(null);
     this._bumptimes = Array(maxBarsNum).fill(0);
     this._timer = 1;
@@ -472,11 +475,11 @@ class ChartController {
     const old = this._bars[i];
 
     if (old === null) {
-      this._painter.addBar(i, copy);
+      this._chartView.addBar(i, copy);
     } else if (old.id === value.id) {
-      this._painter.setBarValue(i, copy);
+      this._chartView.setBarValue(i, copy);
     } else {
-      this._painter.alterBar(i, copy);
+      this._chartView.alterBar(i, copy);
     }
 
     this._bars[i] = copy;
@@ -524,7 +527,7 @@ class ChartController {
   }
 
   handleFlush() {
-    this._painter.flush();
+    this._chartView.flush();
   }
 
 }
@@ -537,9 +540,11 @@ exports.ChartController = ChartController;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.ChartPainter = void 0;
+exports.ChartView = void 0;
 
 var _chart = require("chart.js");
+
+var _view = require("./view.js");
 
 var _utils = require("./utils.js");
 
@@ -560,8 +565,9 @@ const DEFAULT_PARAMS = {
 const MIN_INTERVAL_MILLIS = 600;
 const UPDATE_DURATION_MILLIS = 350;
 
-class ChartPainter {
+class ChartView extends _view.View {
   constructor() {
+    super();
     this._canvas = document.createElement('canvas');
     const data = {
       labels: [],
@@ -686,11 +692,17 @@ class ChartPainter {
     this._repaint(20);
   }
 
+  mount() {}
+
+  unmount() {
+    this.reset();
+  }
+
 }
 
-exports.ChartPainter = ChartPainter;
+exports.ChartView = ChartView;
 
-},{"./utils.js":22,"chart.js":13}],6:[function(require,module,exports){
+},{"./utils.js":21,"./view.js":22,"chart.js":13}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -840,7 +852,7 @@ class FormView extends _view.View {
 
 exports.FormView = FormView;
 
-},{"./gettext.js":7,"./view.js":23}],7:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":22}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -928,11 +940,7 @@ var _algo = require("./algo.js");
 
 var _chart_ctl = require("./chart_ctl.js");
 
-var _chart_painter = require("./chart_painter.js");
-
 var _progress_estimator = require("./progress_estimator.js");
-
-var _progress_painter = require("./progress_painter.js");
 
 var _rate_limited_storage = require("./rate_limited_storage.js");
 
@@ -982,9 +990,7 @@ const asyncMain = async () => {
   }, session);
   const statsStorage = new _stats_storage.StatsStorage(storage);
   const postsStorage = new _posts_storage.PostsStorage(storage);
-  const progressPainter = new _progress_painter.ProgressPainter();
-  const chartPainter = new _chart_painter.ChartPainter();
-  const progressView = new _progress_view.ProgressView(progressPainter, chartPainter);
+  const progressView = new _progress_view.ProgressView();
   const resultsView = new _results_view.ResultsView();
   const formView = new _form_view.FormView();
   const archiveView = new _archive_view.ArchiveView();
@@ -1036,18 +1042,20 @@ const asyncMain = async () => {
       if (stats === undefined) oidsToGatherStats.push(oid);else result[oid] = stats;
     }
 
-    progressPainter.setRatio(0);
+    resolveConfig.logText((0, _gettext.__)('Gathering statistics…'));
+    progressView.setProgress(0);
     const gatherResults = await (0, _algo.gatherStats)({
       oids: oidsToGatherStats,
       session: session,
       ignorePinned: resolveConfig.ignorePinned,
       callback: makeCallbackDispatcher({
         progress: async datum => {
-          progressPainter.setRatio(datum.numerator / datum.denominator);
+          progressView.setProgress(datum.numerator / datum.denominator);
         }
       })
     });
-    progressPainter.reset();
+    resolveConfig.logText((0, _gettext.__)('Saving results…'));
+    progressView.setProgress(NaN);
 
     for (const oid in gatherResults) {
       const stats = gatherResults[oid];
@@ -1078,9 +1086,9 @@ const asyncMain = async () => {
     for (const domain of workConfig.publicDomains) oids.push((await resolveDomainToId(domain)));
 
     oids = (0, _utils.unduplicate)(oids);
-    workConfig.logText((0, _gettext.__)('Gathering statistics…'));
     const stats = await resolveStatsFor(oids, {
-      ignorePinned: workConfig.ignorePinned
+      ignorePinned: workConfig.ignorePinned,
+      logText: workConfig.logText
     });
     let implicitNumerator = 0;
     let implicitDenominator = 0;
@@ -1098,8 +1106,7 @@ const asyncMain = async () => {
       workConfig.logText(statusText);
       implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stat, timeLimit);
       const estimator = new _progress_estimator.ProgressEstimator();
-      chartPainter.reset();
-      const chartCtl = new _chart_ctl.ChartController(30, chartPainter);
+      const chartCtl = new _chart_ctl.ChartController(30, progressView.chartView);
       const callbacks = {
         found: async datum => {
           const link = (0, _vk_url.vkPostUrl)(oid, datum.postId);
@@ -1134,7 +1141,7 @@ const asyncMain = async () => {
 
             const numerator = explicitNumerator + implicitNumerator;
             const denominator = explicitDenominator + implicitDenominator;
-            progressPainter.setRatio(numerator / denominator);
+            progressView.setProgress(numerator / denominator);
           }
         },
         error: async datum => {
@@ -1259,7 +1266,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./chart_painter.js":5,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_painter.js":17,"./progress_view.js":18,"./rate_limited_storage.js":19,"./results_view.js":20,"./stats_storage.js":21,"./utils.js":22,"./view_mgr.js":24,"./vk_api.js":25,"./vk_transport_connect.js":26,"./vk_url.js":27}],10:[function(require,module,exports){
+},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_view.js":17,"./rate_limited_storage.js":18,"./results_view.js":19,"./stats_storage.js":20,"./utils.js":21,"./view_mgr.js":23,"./vk_api.js":24,"./vk_transport_connect.js":25,"./vk_url.js":26}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1352,7 +1359,7 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./gettext.js":7,"./view.js":23}],12:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":22}],12:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -21246,55 +21253,31 @@ exports.ProgressEstimator = ProgressEstimator;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.ProgressPainter = void 0;
-const MAX_VALUE = 1000;
-
-class ProgressPainter {
-  constructor() {
-    this._element = document.createElement('progress');
-
-    this._element.setAttribute('max', String(MAX_VALUE));
-  }
-
-  get element() {
-    return this._element;
-  }
-
-  reset() {
-    this._element.setAttribute('value', '');
-  }
-
-  setRatio(ratio) {
-    this._element.setAttribute('value', String(Math.round(ratio * MAX_VALUE)));
-  }
-
-}
-
-exports.ProgressPainter = ProgressPainter;
-
-},{}],18:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
 exports.ProgressView = void 0;
 
 var _view = require("./view.js");
 
+var _chart_view = require("./chart_view.js");
+
 var _gettext = require("./gettext.js");
 
+const PROGRESS_MAX = 1000;
+
 class ProgressView extends _view.View {
-  constructor(progress_painter, chart_painter) {
+  constructor() {
     super();
     this._div = document.createElement('div');
-    this._progress_painter = progress_painter;
-    this._chart_painter = chart_painter;
-    this._progress_painter.element.style = 'display: block; width: 100%;';
+    this._progress = document.createElement('progress');
 
-    this._div.appendChild(this._progress_painter.element);
+    this._progress.setAttribute('max', String(PROGRESS_MAX));
 
-    this._div.appendChild(this._chart_painter.element);
+    this._progress.style = 'display: block; width: 100%;';
+
+    this._div.appendChild(this._progress);
+
+    this._chartView = new _chart_view.ChartView();
+
+    this._div.appendChild(this._chartView.element);
 
     this._bottom = document.createElement('div');
     this._cancelBtn = document.createElement('input');
@@ -21323,12 +21306,24 @@ class ProgressView extends _view.View {
     return this._div;
   }
 
-  mount() {}
+  get chartView() {
+    return this._chartView;
+  }
+
+  setProgress(ratio) {
+    const v = isNaN(ratio) ? '' : String(Math.round(ratio * PROGRESS_MAX));
+
+    this._progress.setAttribute('value', v);
+  }
+
+  mount() {
+    this._chartView.mount();
+  }
 
   unmount() {
-    this._progress_painter.reset();
+    this.setProgress(NaN);
 
-    this._chart_painter.reset();
+    this._chartView.unmount();
 
     this._log.innerHTML = '';
   }
@@ -21343,7 +21338,7 @@ class ProgressView extends _view.View {
 
 exports.ProgressView = ProgressView;
 
-},{"./gettext.js":7,"./view.js":23}],19:[function(require,module,exports){
+},{"./chart_view.js":5,"./gettext.js":7,"./view.js":22}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21745,7 +21740,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":10,"./utils.js":22,"./vk_api.js":25}],20:[function(require,module,exports){
+},{"./intcodec.js":10,"./utils.js":21,"./vk_api.js":24}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21842,7 +21837,7 @@ class ResultsView extends _view.View {
 
 exports.ResultsView = ResultsView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],21:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":21,"./view.js":22}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21888,7 +21883,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":10}],22:[function(require,module,exports){
+},{"./intcodec.js":10}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21970,7 +21965,7 @@ const createAnchor = link => {
 
 exports.createAnchor = createAnchor;
 
-},{}],23:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21996,7 +21991,7 @@ class View {
 
 exports.View = View;
 
-},{}],24:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22033,7 +22028,7 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],25:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22168,7 +22163,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":22}],26:[function(require,module,exports){
+},{"./utils.js":21}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22299,7 +22294,7 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":25,"@vkontakte/vk-connect":12}],27:[function(require,module,exports){
+},{"./vk_api.js":24,"@vkontakte/vk-connect":12}],26:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
