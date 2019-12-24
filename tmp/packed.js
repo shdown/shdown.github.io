@@ -877,45 +877,49 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.__ = void 0;
+const trnRu = {
+  'Loading…': 'Загрузка…',
+  'Back': 'Назад',
+  'Archive is empty.': 'Архив пуст.',
+  'Comments by ': 'Комментарии ',
+  'User ID or handle (for example, “1” or “durov”):': 'ID пользователя или адрес страницы (например, “1” или “durov”):',
+  'Public list (IDs or handles); separate with commas, spaces or line feeds:': 'Список пабликов (ID или адреса страниц); разделяйте запятыми, пробелами или переводами строки:',
+  'Fill with user subscriptions': 'Заполнить подписками пользователя',
+  'Time limit, days:': 'Ограничение по времени, в днях:',
+  'Find!': 'Найти!',
+  'Archive': 'Архив',
+  'Hello! This app can find posts made by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
+  'It uses the execute() method, which allows checking 25 posts per request': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
+  'We are being too fast ({0})': 'Умерим пыл ({0})',
+  'Getting server time…': 'Получаю время сервера…',
+  'Checking user…': 'Проверяю пользователя…',
+  'Checking public list…': 'Проверяю список пабликов…',
+  'Gathering statistics…': 'Собираю статистику…',
+  'Error gathering statistics: {0}': 'Ошибка при сборе статистики: {0}',
+  'Searching in {0}/{1}…': 'Ищу в {0}/{1}…',
+  '  (found {0})': ' (найдено {0})',
+  'Found: {0}': 'Найдено: {0}',
+  'Error checking {0}: {1}': 'Ошибка при проверке {0}: {1}',
+  'Saving results…': 'Сохраняю результаты…',
+  'No subscriptions found!': 'Подписок не найдено!',
+  'Error: {0}': 'Ошибка: {0}',
+  'Loading…': 'Загрузка…',
+  'Cancel': 'Отмена',
+  'Nothing found! 😢': 'Ничего не найдено! 😢',
+  'Posts founds:': 'Найдены посты:',
+  ' (new)': ' (новый)',
+  ' (old)': ' (старый)'
+};
 const translations = {
-  ru: {
-    'Loading…': 'Загрузка…',
-    'Back': 'Назад',
-    'Archive is empty.': 'Архив пуст.',
-    'Comments by ': 'Комментарии ',
-    'User ID or handle (for example, “1” or “durov”):': 'ID пользователя или адрес страницы (например, “1” или “durov”):',
-    'Public list (IDs or handles); separate with commas, spaces or line feeds:': 'Список пабликов (ID или адреса страниц); разделяйте запятыми, пробелами или переводами строки:',
-    'Fill with user subscriptions': 'Заполнить подписками пользователя',
-    'Time limit, days:': 'Ограничение по времени, в днях:',
-    'Find!': 'Найти!',
-    'Archive': 'Архив',
-    'Hello! This app can find posts made by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
-    'It uses the execute() method, which allows checking 25 posts per request': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
-    'We are being too fast ({0})': 'Умерим пыл ({0})',
-    'Getting server time…': 'Получаю время сервера…',
-    'Checking user…': 'Проверяю пользователя…',
-    'Checking public list…': 'Проверяю список пабликов…',
-    'Gathering statistics…': 'Собираю статистику…',
-    'Error gathering statistics: {0}': 'Ошибка при сборе статистики: {0}',
-    'Searching in {0}/{1}…': 'Ищу в {0}/{1}…',
-    '  (found {0})': ' (найдено {0})',
-    'Found: {0}': 'Найдено: {0}',
-    'Error checking {0}: {1}': 'Ошибка при проверке {0}: {1}',
-    'Saving results…': 'Сохраняю результаты…',
-    'No subscriptions found!': 'Подписок не найдено!',
-    'Error: {0}': 'Ошибка: {0}',
-    'Loading…': 'Загрузка…',
-    'Cancel': 'Отмена',
-    'Nothing found! 😢': 'Ничего не найдено! 😢',
-    'Posts founds:': 'Найдены посты:',
-    ' (new)': ' (новый)',
-    ' (old)': ' (старый)'
-  }
+  ru: trnRu,
+  ua: trnRu,
+  by: trnRu
 };
 
 const selectTranslation = langTag => {
+  // See RFC 4646.
   if (typeof langTag !== 'string') return undefined;
-  const m = langTag.match(/^[a-zA-Z]+/);
+  const m = langTag.toLowerCase().match(/^[a-z]+/);
   if (m === null) return undefined;
   return translations[m[0]];
 };
@@ -1061,7 +1065,7 @@ const asyncMain = async () => {
       if (stats === undefined) oidsToGatherStats.push(oid);else result[oid] = stats;
     }
 
-    resolveConfig.logText((0, _gettext.__)('Gathering statistics…'));
+    progressView.setLogText((0, _gettext.__)('Gathering statistics…'));
     progressView.setProgress(0);
     const gatherResults = await (0, _algo.gatherStats)({
       oids: oidsToGatherStats,
@@ -1073,11 +1077,11 @@ const asyncMain = async () => {
         },
         error: async datum => {
           const error = datum.error;
-          resolveConfig.logText((0, _gettext.__)('Error gathering statistics: {0}', `${error.name}: ${error.message}`));
+          progressView.setLogText((0, _gettext.__)('Error gathering statistics: {0}', `${error.name}: ${error.message}`));
         }
       })
     });
-    resolveConfig.logText((0, _gettext.__)('Saving results…'));
+    progressView.setLogText((0, _gettext.__)('Saving results…'));
     progressView.setProgress(NaN);
 
     for (const oid in gatherResults) {
@@ -1093,25 +1097,24 @@ const asyncMain = async () => {
 
   const work = async workConfig => {
     session.setRateLimitCallback(reason => {
-      workConfig.logText((0, _gettext.__)('We are being too fast ({0})', reason));
+      progressView.setLogText((0, _gettext.__)('We are being too fast ({0})', reason));
     });
-    workConfig.logText((0, _gettext.__)('Getting server time…'));
+    progressView.setLogText((0, _gettext.__)('Getting server time…'));
     const serverTime = await session.apiRequest('utils.getServerTime', {
       v: '5.101'
     });
     const timeLimit = workConfig.timeLimit;
     const sinceTimestamp = serverTime - timeLimit;
-    workConfig.logText((0, _gettext.__)('Checking user…'));
+    progressView.setLogText((0, _gettext.__)('Checking user…'));
     const uid = await resolveDomainToId(workConfig.userDomain);
-    workConfig.logText((0, _gettext.__)('Checking public list…'));
+    progressView.setLogText((0, _gettext.__)('Checking public list…'));
     let oids = [];
 
     for (const domain of workConfig.publicDomains) oids.push((await resolveDomainToId(domain)));
 
     oids = (0, _utils.unduplicate)(oids);
     const stats = await resolveStatsFor(oids, {
-      ignorePinned: workConfig.ignorePinned,
-      logText: workConfig.logText
+      ignorePinned: workConfig.ignorePinned
     });
     let implicitNumerator = 0;
     let implicitDenominator = 0;
@@ -1126,7 +1129,7 @@ const asyncMain = async () => {
       if (stat === undefined) continue;
       let statusText = (0, _gettext.__)('Searching in {0}/{1}…', `${i + 1}`, `${oids.length}`);
       if (result.length !== 0) statusText += (0, _gettext.__)(' (found {0})', `${result.length}`);
-      workConfig.logText(statusText);
+      progressView.setLogText(statusText);
       implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stat, timeLimit);
       const estimator = new _progress_estimator.ProgressEstimator();
       const chartCtl = new _chart_ctl.ChartController(30, progressView.chartView);
@@ -1143,7 +1146,7 @@ const asyncMain = async () => {
             offset: datum.offset,
             isNew: isNew
           });
-          workConfig.logText((0, _gettext.__)('Found: {0}', link));
+          progressView.setLogText((0, _gettext.__)('Found: {0}', link));
         },
         infoAdd: async datum => {
           chartCtl.handleAdd(datum);
@@ -1169,7 +1172,7 @@ const asyncMain = async () => {
         },
         error: async datum => {
           const error = datum.error;
-          workConfig.logText((0, _gettext.__)('Error checking {0}: {1}', `${oid}_${datum.postId}`, `${error.name}: ${error.message}`));
+          progressView.setLogText((0, _gettext.__)('Error checking {0}: {1}', `${oid}_${datum.postId}`, `${error.name}: ${error.message}`));
           console.log('error callback payload:');
           console.log(error);
         }
@@ -1192,7 +1195,7 @@ const asyncMain = async () => {
     }
 
     while (storage.hasSomethingToFlush()) {
-      workConfig.logText((0, _gettext.__)('Saving results…'));
+      progressView.setLogText((0, _gettext.__)('Saving results…'));
       await (0, _utils.sleepMillis)(200);
       await storage.flush();
     }
@@ -1223,10 +1226,7 @@ const asyncMain = async () => {
       userDomain: formView.userDomain,
       publicDomains: formView.ownerDomains,
       timeLimit: formView.timeLimitSeconds,
-      ignorePinned: false,
-      logText: text => {
-        progressView.setLogText(text);
-      }
+      ignorePinned: false
     };
     work(workConfig).then(results => {
       session.setCancelFlag(false);
