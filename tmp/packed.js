@@ -114,7 +114,7 @@ class Reader {
     await this._config.callback('infoFlush', null);
     this._cache = newCache;
     this._cachePos = 0;
-    if (result.items.length < MAX_POSTS) await this._setEOF('noNorePosts');
+    if (result.items.length < MAX_POSTS) await this._setEOF('noMorePosts');
     this._globalOffset += result.items.length;
   }
 
@@ -302,14 +302,13 @@ const findPosts = async config => {
 exports.findPosts = findPosts;
 
 const gatherStatsBatch = async (config, batch, result) => {
-  const COUNTS = [100, 50, 25, 13, 7, 4, 2];
-  let executeResult;
+  let executeResult = undefined;
 
-  for (let i = 0;;) {
+  for (let count = MAX_COMMENTS; count > 1; count >>= 1) {
     let code = `var i = 0, r = [];`;
     code += `var d = [${batch.join(',')}];`;
     code += `while (i < ${batch.length}) {`;
-    code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${COUNTS[i]}}));`;
+    code += ` r.push(API.wall.get({owner_id: d[i], offset: 0, count: ${count}}));`;
     code += ` i = i + 1;`;
     code += `}`;
     code += `return r;`;
@@ -326,11 +325,10 @@ const gatherStatsBatch = async (config, batch, result) => {
       await config.callback('error', {
         error: err
       });
-      ++i;
-      if (i === COUNTS.length) throw err;
-      continue;
     }
   }
+
+  if (executeResult === undefined) return;
 
   for (let i = 0; i < batch.length; ++i) {
     const ownerDatum = executeResult[i];
@@ -21185,6 +21183,7 @@ class PostsStorage {
       });
     }
 
+    result.reverse();
     return result;
   }
 
