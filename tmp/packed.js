@@ -19,6 +19,7 @@ const splitPermissions = s => {
 class AccessTokenError extends Error {
   constructor(requestedScope, gotScope) {
     super(`Requested scope '${requestedScope}', got '${gotScope}'`);
+    this.name = 'AccessTokenError';
   }
 
 }
@@ -30,7 +31,7 @@ const requestAccessToken = async scope => {
     app_id: _global_config.GLOBAL_CONFIG.APP_ID,
     scope: scope
   });
-  if (!(0, _utils.isSubset)(splitPermissions(scope), splitPermissions(result.scope))) throw AccessTokenError(scope, result.scope);
+  if (!(0, _utils.isSubset)(splitPermissions(scope), splitPermissions(result.scope))) throw new AccessTokenError(scope, result.scope);
   return result.access_token;
 };
 
@@ -21655,7 +21656,8 @@ class RateLimitedStorage {
     this._timer = null;
   }
 
-  async _fetchMetadata() {
+  async _fetchMetadataIfNeeded() {
+    if (this._timer !== null) return;
     const rawKeys = await this._hardware.readKeys();
     const values = await this._hardware.readMany(rawKeys);
     const builder = new MetadataBuilder(this._perKeyLimits);
@@ -21695,7 +21697,7 @@ class RateLimitedStorage {
   }
 
   async write(key, value) {
-    if (this._timer === null) await this._fetchMetadata();
+    await this._fetchMetadataIfNeeded();
     const metadata = this._keyToMetadata[key];
     const {
       index,
@@ -21723,7 +21725,7 @@ class RateLimitedStorage {
   }
 
   async read(key) {
-    if (this._timer === null) await this._fetchMetadata();
+    await this._fetchMetadataIfNeeded();
 
     const rawKeys = this._getRawKeys(key);
 
@@ -21740,7 +21742,7 @@ class RateLimitedStorage {
   }
 
   async clear() {
-    if (this._timer === null) await this._fetchMetadata();
+    await this._fetchMetadataIfNeeded();
 
     for (const key in this._keyToMetadata) for (const rawKey of this._getRawKeys(key)) this._cache.write(rawKey, ''); // Reset the metadata.
 
