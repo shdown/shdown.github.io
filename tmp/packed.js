@@ -37,7 +37,7 @@ const requestAccessToken = async scope => {
 
 exports.requestAccessToken = requestAccessToken;
 
-},{"./global_config.js":8,"./utils.js":21,"./vk_transport_connect.js":25}],2:[function(require,module,exports){
+},{"./global_config.js":8,"./utils.js":22,"./vk_transport_connect.js":26}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -48,6 +48,8 @@ exports.gatherStats = exports.findPosts = void 0;
 var _vk_api = require("./vk_api.js");
 
 var _utils = require("./utils.js");
+
+var _stats_utils = require("./stats_utils.js");
 
 const MAX_POSTS = 100;
 const MAX_COMMENTS = 100;
@@ -298,7 +300,8 @@ const findPosts = async config => {
 
     await hotGroup.decreaseCurrent(amountsById);
   }
-};
+}; //-------------------------------------------------------------------------------------------------
+
 
 exports.findPosts = findPosts;
 
@@ -352,11 +355,11 @@ const gatherStatsBatch = async (config, batch, result) => {
       }
     }
 
-    if (earliestTimestamp === Infinity) continue;
-    result[ownerId] = {
+    const stats = {
       timeSpan: latestTimestamp - earliestTimestamp,
       totalComments: totalComments
     };
+    if ((0, _stats_utils.isStatsValid)(stats)) result[ownerId] = stats;
   }
 };
 
@@ -381,7 +384,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./utils.js":21,"./vk_api.js":24}],3:[function(require,module,exports){
+},{"./stats_utils.js":21,"./utils.js":22,"./vk_api.js":25}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -467,7 +470,7 @@ class ArchiveView extends _view.View {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./gettext.js":7,"./utils.js":21,"./view.js":22,"./vk_url.js":26}],4:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23,"./vk_url.js":27}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -719,7 +722,7 @@ class ChartView extends _view.View {
 
 exports.ChartView = ChartView;
 
-},{"./utils.js":21,"./view.js":22,"chart.js":13}],6:[function(require,module,exports){
+},{"./utils.js":22,"./view.js":23,"chart.js":13}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -869,7 +872,7 @@ class FormView extends _view.View {
 
 exports.FormView = FormView;
 
-},{"./gettext.js":7,"./view.js":22}],7:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":23}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1288,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_view.js":17,"./rate_limited_storage.js":18,"./results_view.js":19,"./stats_storage.js":20,"./utils.js":21,"./view_mgr.js":23,"./vk_api.js":24,"./vk_transport_connect.js":25,"./vk_url.js":26}],10:[function(require,module,exports){
+},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_view.js":17,"./rate_limited_storage.js":18,"./results_view.js":19,"./stats_storage.js":20,"./utils.js":22,"./view_mgr.js":24,"./vk_api.js":25,"./vk_transport_connect.js":26,"./vk_url.js":27}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1381,7 +1384,7 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./gettext.js":7,"./view.js":22}],12:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":23}],12:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -21220,6 +21223,8 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.ProgressEstimator = void 0;
 
+var _stats_utils = require("./stats_utils.js");
+
 class ProgressEstimator {
   constructor() {
     this._offsets = {};
@@ -21251,11 +21256,11 @@ class ProgressEstimator {
   }
 
   getStats() {
-    if (this._earliestTimestamp === Infinity) return undefined;
-    return {
+    const stats = {
       timeSpan: this._latestTimestamp - this._earliestTimestamp,
       totalComments: this._totalTodo
     };
+    return (0, _stats_utils.isStatsValid)(stats) ? stats : undefined;
   }
 
   getDoneCommentsNumber() {
@@ -21270,7 +21275,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{}],17:[function(require,module,exports){
+},{"./stats_utils.js":21}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21361,7 +21366,7 @@ class ProgressView extends _view.View {
 
 exports.ProgressView = ProgressView;
 
-},{"./chart_view.js":5,"./gettext.js":7,"./view.js":22}],18:[function(require,module,exports){
+},{"./chart_view.js":5,"./gettext.js":7,"./view.js":23}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21775,7 +21780,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":10,"./utils.js":21,"./vk_api.js":24}],19:[function(require,module,exports){
+},{"./intcodec.js":10,"./utils.js":22,"./vk_api.js":25}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21872,7 +21877,7 @@ class ResultsView extends _view.View {
 
 exports.ResultsView = ResultsView;
 
-},{"./gettext.js":7,"./utils.js":21,"./view.js":22}],20:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21919,6 +21924,20 @@ class StatsStorage {
 exports.StatsStorage = StatsStorage;
 
 },{"./intcodec.js":10}],21:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.isStatsValid = void 0;
+
+const isStatsValid = stats => {
+  return stats.timeSpan > 0 && stats.timeSpan !== Infinity;
+};
+
+exports.isStatsValid = isStatsValid;
+
+},{}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22000,7 +22019,7 @@ const createAnchor = link => {
 
 exports.createAnchor = createAnchor;
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22028,7 +22047,7 @@ class View {
 
 exports.View = View;
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22065,7 +22084,7 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22200,7 +22219,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":21}],25:[function(require,module,exports){
+},{"./utils.js":22}],26:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22331,7 +22350,7 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":24,"@vkontakte/vk-connect":12}],26:[function(require,module,exports){
+},{"./vk_api.js":25,"@vkontakte/vk-connect":12}],27:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
