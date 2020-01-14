@@ -1274,8 +1274,9 @@ const installGlobalErrorHandler = () => {
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
     const text = document.createElement('div');
+    text.setAttribute('class', 'alert alert-danger');
+    text.setAttribute('role', 'alert');
     text.append(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
-    text.style = 'color: red;';
     rootDiv.prepend(text);
     console.log('Error object:');
     console.log(errorObj);
