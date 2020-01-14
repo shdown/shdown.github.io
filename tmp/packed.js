@@ -1370,7 +1370,15 @@ class LoadingView extends _view.View {
     super();
     this._div = document.createElement('div');
 
-    this._div.append((0, _gettext.__)('Loading…'));
+    this._div.setAttribute('class', 'spinner-border');
+
+    this._div.setAttribute('role', 'status');
+
+    const span = document.createElement('span');
+    span.setAttribute('class', 'sr-only');
+    span.append((0, _gettext.__)('Loading…'));
+
+    this._div.append(span);
   }
 
   get element() {
