@@ -743,7 +743,7 @@ const createDiv = text => {
 };
 
 const createInputGroup = () => {
-  return (0, _utils.fromHtml)(`<div class="input-group mb-3"></div>`);
+  return (0, _utils.fromHtml)(`<div class="form-group"></div>`);
 };
 
 const createInput = params => {
@@ -1423,7 +1423,7 @@ class LoadingView extends _view.View {
     super();
     this._div = (0, _utils.fromHtml)(`
 <div class="text-center">
-  <div class="spinner-grow" role="status">
+  <div class="spinner-border" role="status">
     <span class="sr-only">${(0, _utils.htmlEscape)((0, _gettext.__)("Loading…"))}</span>
   </div>
 </div>`);
