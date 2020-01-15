@@ -734,93 +734,139 @@ var _view = require("./view.js");
 
 var _gettext = require("./gettext.js");
 
+var _utils = require("./utils.js");
+
 const createDiv = text => {
   const div = document.createElement('div');
   div.append(text);
   return div;
 };
 
+const createInputGroup = () => {
+  return (0, _utils.fromHtml)(`<div class="input-group mb-3"></div>`);
+};
+
+const createInput = params => {
+  const inputId = params.what === undefined ? undefined : `fv_input_${params.what}`;
+
+  if (params.label !== undefined) {
+    const label = document.createElement('label');
+    if (inputId !== undefined) label.setAttribute('for', inputId);
+    label.append(params.label);
+    params.group.append(label);
+  }
+
+  let input;
+
+  if (params.textarea) {
+    input = (0, _utils.fromHtml)(`<textarea class="form-control"></textarea>`);
+  } else {
+    input = (0, _utils.fromHtml)(`<input type="text" class="form-control"></input>`);
+  }
+
+  if (inputId !== undefined) input.setAttribute('id', inputId);
+  params.group.append(input);
+
+  if (params.note !== undefined) {
+    const note = (0, _utils.fromHtml)(`<small class="form-text text-muted"></small>`);
+    note.append(params.note);
+    params.group.append(note);
+  }
+
+  if (params.extraAttributes !== undefined) {
+    for (const attr in params.extraAttributes) input.setAttribute(attr, params.extraAttributes[attr]);
+  }
+
+  return input;
+};
+
+const createButton = params => {
+  const btn = (0, _utils.fromHtml)(`<button class="btn btn-primary"></button>`);
+  btn.append(params.value);
+  if (params.type !== undefined) btn.setAttribute('type', params.type);
+  if (params.onclick !== undefined) btn.onclick = params.onclick;
+  if (params.block) btn.style = 'display: block;';
+  params.group.append(btn);
+  return btn;
+};
+
 class FormView extends _view.View {
   constructor() {
     super();
     this._form = document.createElement('form');
+    {
+      const inputGrp = createInputGroup();
+      this._userInput = createInput({
+        group: inputGrp,
+        what: 'uid',
+        label: (0, _gettext.__)('User'),
+        note: (0, _gettext.__)('ID or handle (for example, “1” or “durov”)'),
+        extraAttributes: {
+          required: true
+        }
+      });
 
-    this._form.appendChild(createDiv((0, _gettext.__)('User ID or handle (for example, “1” or “durov”):')));
+      this._form.appendChild(inputGrp);
+    }
+    {
+      const inputGrp = createInputGroup();
+      this._ownersInput = createInput({
+        group: inputGrp,
+        what: 'oids',
+        label: (0, _gettext.__)('Public list'),
+        note: (0, _gettext.__)('IDs or handles; separate with commas, spaces or line feeds'),
+        textarea: true,
+        extraAttributes: {
+          required: '1'
+        }
+      });
+      this._getSubsBtn = createButton({
+        group: inputGrp,
+        value: (0, _gettext.__)('Fill with user subscriptions'),
+        block: true,
+        onclick: () => {
+          super._emitSignal('get-subs');
 
-    this._userInput = document.createElement('input');
+          return false;
+        }
+      });
 
-    this._userInput.setAttribute('type', 'text');
+      this._form.appendChild(inputGrp);
+    }
+    {
+      const inputGrp = createInputGroup();
+      this._timeLimitInput = createInput({
+        group: inputGrp,
+        what: 'tl',
+        label: (0, _gettext.__)('Time limits, days'),
+        extraAttributes: {
+          type: 'number',
+          value: '30',
+          required: '1'
+        }
+      });
 
-    this._userInput.setAttribute('required', '1');
+      this._form.appendChild(inputGrp);
+    }
+    {
+      const inputGrp = createInputGroup();
+      this._submitBtn = createButton({
+        group: inputGrp,
+        type: 'submit',
+        value: (0, _gettext.__)('Find!')
+      });
+      this._archiveBtn = createButton({
+        group: inputGrp,
+        value: (0, _gettext.__)('Archive'),
+        onclick: () => {
+          super._emitSignal('open-archive');
 
-    this._form.appendChild(this._userInput);
+          return false;
+        }
+      });
 
-    this._form.appendChild(document.createElement('hr'));
-
-    this._form.appendChild(createDiv((0, _gettext.__)('Public list (IDs or handles); separate with commas, spaces or line feeds:')));
-
-    this._ownersInput = document.createElement('textarea');
-
-    this._ownersInput.setAttribute('required', '1');
-
-    this._form.appendChild(this._ownersInput);
-
-    this._getSubsBtn = document.createElement('input');
-
-    this._getSubsBtn.setAttribute('type', 'button');
-
-    this._getSubsBtn.setAttribute('value', (0, _gettext.__)('Fill with user subscriptions'));
-
-    this._getSubsBtn.style = 'display: block;';
-
-    this._getSubsBtn.onclick = () => {
-      super._emitSignal('get-subs');
-
-      return false;
-    };
-
-    this._form.appendChild(this._getSubsBtn);
-
-    this._form.appendChild(document.createElement('hr'));
-
-    this._form.appendChild(createDiv((0, _gettext.__)('Time limit, days:')));
-
-    this._timeLimitInput = document.createElement('input');
-
-    this._timeLimitInput.setAttribute('type', 'number');
-
-    this._timeLimitInput.setAttribute('required', '1');
-
-    this._timeLimitInput.setAttribute('value', '30');
-
-    this._form.appendChild(this._timeLimitInput);
-
-    this._form.appendChild(document.createElement('hr'));
-
-    this._submitBtn = document.createElement('input');
-
-    this._submitBtn.setAttribute('type', 'submit');
-
-    this._submitBtn.setAttribute('value', (0, _gettext.__)('Find!'));
-
-    this._form.appendChild(this._submitBtn);
-
-    this._archiveBtn = document.createElement('input');
-
-    this._archiveBtn.setAttribute('type', 'button');
-
-    this._archiveBtn.setAttribute('value', (0, _gettext.__)('Archive'));
-
-    this._archiveBtn.onclick = () => {
-      super._emitSignal('open-archive');
-
-      return false;
-    };
-
-    this._form.appendChild(this._archiveBtn);
-
-    this._form.appendChild(document.createElement('hr'));
-
+      this._form.appendChild(inputGrp);
+    }
     this._log = document.createElement('div');
 
     this._form.appendChild(this._log);
@@ -862,7 +908,7 @@ class FormView extends _view.View {
 
   unmount() {}
 
-  setLogText(text) {
+  setLogText(text, tone = 'info') {
     this._log.innerHTML = '';
 
     this._log.append(text);
@@ -872,7 +918,7 @@ class FormView extends _view.View {
 
 exports.FormView = FormView;
 
-},{"./gettext.js":7,"./view.js":23}],7:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1216,10 +1262,14 @@ const asyncMain = async () => {
 
   formView.subscribe('get-subs', () => {
     getSubscriptions(formView.userDomain).then(data => {
-      if (data.length === 0) formView.setLogText((0, _gettext.__)('No subscriptions found!'));
+      if (data.length === 0) formView.setLogText((0, _gettext.__)('No subscriptions found!'),
+      /*tone=*/
+      'warning');
       formView.ownerDomains = data;
     }).catch(err => {
-      formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`));
+      formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`),
+      /*tone=*/
+      'error');
     });
   });
   formView.subscribe('submit', () => {
@@ -1254,7 +1304,9 @@ const asyncMain = async () => {
       archiveView.setData(data);
     }).catch(err => {
       viewManager.show(formView);
-      formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`));
+      formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`),
+      /*tone=*/
+      'error');
     });
   });
   archiveView.subscribe('back', () => {
@@ -1273,11 +1325,10 @@ const installGlobalErrorHandler = () => {
   const rootDiv = document.getElementById('root');
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
-    const text = document.createElement('div');
-    text.setAttribute('class', 'alert alert-danger');
-    text.setAttribute('role', 'alert');
-    text.append(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`);
-    rootDiv.prepend(text);
+    rootDiv.prepend((0, _utils.fromHtml)(`
+<div class="alert alert-danger">
+  ${(0, _utils.htmlEscape)(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`)}
+</div>`));
     console.log('Error object:');
     console.log(errorObj);
     return false;
@@ -1363,22 +1414,19 @@ exports.LoadingView = void 0;
 
 var _view = require("./view.js");
 
+var _utils = require("./utils.js");
+
 var _gettext = require("./gettext.js");
 
 class LoadingView extends _view.View {
   constructor() {
     super();
-    this._div = document.createElement('div');
-
-    this._div.setAttribute('class', 'spinner-border');
-
-    this._div.setAttribute('role', 'status');
-
-    const span = document.createElement('span');
-    span.setAttribute('class', 'sr-only');
-    span.append((0, _gettext.__)('Loading…'));
-
-    this._div.append(span);
+    this._div = (0, _utils.fromHtml)(`
+<div class="text-center">
+  <div class="spinner-grow" role="status">
+    <span class="sr-only">${(0, _utils.htmlEscape)((0, _gettext.__)("Loading…"))}</span>
+  </div>
+</div>`);
   }
 
   get element() {
@@ -1393,7 +1441,7 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./gettext.js":7,"./view.js":23}],12:[function(require,module,exports){
+},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],12:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -21952,7 +22000,7 @@ exports.isStatsValid = isStatsValid;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.createAnchor = exports.parseSearchString = exports.htmlEscape = exports.unduplicate = exports.isSubset = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.createAnchor = exports.parseSearchString = exports.fromHtml = exports.htmlEscape = exports.unduplicate = exports.isSubset = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -21999,6 +22047,14 @@ const htmlEscape = s => {
 };
 
 exports.htmlEscape = htmlEscape;
+
+const fromHtml = html => {
+  const tmpl = document.createElement('template');
+  tmpl.innerHTML = html;
+  return tmpl.content.firstChild;
+};
+
+exports.fromHtml = fromHtml;
 
 const parseSearchString = search => {
   const segments = search.slice(search.indexOf('?') + 1).split('&');
