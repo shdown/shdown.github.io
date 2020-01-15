@@ -795,23 +795,23 @@ class FormView extends _view.View {
     super();
     this._form = document.createElement('form');
     {
-      const inputGrp = createInputGroup();
+      const inputGroup = createInputGroup();
       this._userInput = createInput({
-        group: inputGrp,
+        group: inputGroup,
         what: 'uid',
         label: (0, _gettext.__)('User'),
         note: (0, _gettext.__)('ID or handle (for example, “1” or “durov”)'),
         extraAttributes: {
-          required: true
+          required: '1'
         }
       });
 
-      this._form.appendChild(inputGrp);
+      this._form.appendChild(inputGroup);
     }
     {
-      const inputGrp = createInputGroup();
+      const inputGroup = createInputGroup();
       this._ownersInput = createInput({
-        group: inputGrp,
+        group: inputGroup,
         what: 'oids',
         label: (0, _gettext.__)('Public list'),
         note: (0, _gettext.__)('IDs or handles; separate with commas, spaces or line feeds'),
@@ -821,7 +821,7 @@ class FormView extends _view.View {
         }
       });
       this._getSubsBtn = createButton({
-        group: inputGrp,
+        group: inputGroup,
         value: (0, _gettext.__)('Fill with user subscriptions'),
         block: true,
         onclick: () => {
@@ -831,12 +831,12 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGrp);
+      this._form.appendChild(inputGroup);
     }
     {
-      const inputGrp = createInputGroup();
+      const inputGroup = createInputGroup();
       this._timeLimitInput = createInput({
-        group: inputGrp,
+        group: inputGroup,
         what: 'tl',
         label: (0, _gettext.__)('Time limits, days'),
         extraAttributes: {
@@ -846,17 +846,17 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGrp);
+      this._form.appendChild(inputGroup);
     }
     {
-      const inputGrp = createInputGroup();
+      const inputGroup = createInputGroup();
       this._submitBtn = createButton({
-        group: inputGrp,
+        group: inputGroup,
         type: 'submit',
         value: (0, _gettext.__)('Find!')
       });
       this._archiveBtn = createButton({
-        group: inputGrp,
+        group: inputGroup,
         value: (0, _gettext.__)('Archive'),
         onclick: () => {
           super._emitSignal('open-archive');
@@ -865,7 +865,7 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGrp);
+      this._form.appendChild(inputGroup);
     }
     this._log = document.createElement('div');
 
@@ -901,17 +901,38 @@ class FormView extends _view.View {
   mount() {
     this._log.innerHTML = '';
 
-    this._log.appendChild(createDiv((0, _gettext.__)('Hello! This app can find posts made by a specific user.')));
+    this._log.append((0, _gettext.__)('Hello! This app can find posts made by a specific user.'));
 
-    this._log.appendChild(createDiv((0, _gettext.__)('It uses the execute() method, which allows checking 25 posts per request')));
+    this._log.append(document.createElement('br'));
+
+    this._log.append((0, _gettext.__)('It uses the execute() method, which allows checking 25 posts per request'));
   }
 
   unmount() {}
 
   setLogText(text, tone = 'info') {
     this._log.innerHTML = '';
+    let alertClass;
 
-    this._log.append(text);
+    switch (tone) {
+      case 'warning':
+        alertClass = 'alert-warning';
+        break;
+
+      case 'error':
+        alertClass = 'alert-danger';
+        break;
+
+      case 'info':
+      default:
+        alertClass = 'alert-light';
+        break;
+    }
+
+    const alertDiv = (0, _utils.fromHtml)(`<div class="alert ${alertClass}" role="alert"></div>`);
+    alertDiv.append(text);
+
+    this._log.append(alertDiv);
   }
 
 }
