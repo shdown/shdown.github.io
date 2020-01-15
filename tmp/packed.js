@@ -1421,12 +1421,7 @@ var _gettext = require("./gettext.js");
 class LoadingView extends _view.View {
   constructor() {
     super();
-    this._div = (0, _utils.fromHtml)(`
-<div class="text-center">
-  <div class="spinner-border" role="status">
-    <span class="sr-only">${(0, _utils.htmlEscape)((0, _gettext.__)("Loading…"))}</span>
-  </div>
-</div>`);
+    this._div = (0, _utils.fromHtml)(`<div class="spinner-border" role="status"> <span class="sr-only">Loading...</span> </div>`);
   }
 
   get element() {
