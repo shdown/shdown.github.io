@@ -1067,7 +1067,9 @@ const makeCallbackDispatcher = callbacks => {
 
 const asyncMain = async () => {
   const rootDiv = document.getElementById('root');
-  const viewManager = new _view_mgr.ViewManager(rootDiv);
+  const subRootDiv = (0, _utils.fromHtml)(`<div style="width: 95%; margin: 0 auto;"></div>`);
+  rootDiv.append(subRootDiv);
+  const viewManager = new _view_mgr.ViewManager(subRootDiv);
   const loadingView = new _loading_view.LoadingView();
   viewManager.show(loadingView);
   const transport = new _vk_transport_connect.Transport();
