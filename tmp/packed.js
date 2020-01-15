@@ -782,7 +782,7 @@ const createInput = params => {
 
 const createButton = params => {
   const btnKind = params.kind || 'primary';
-  const btn = (0, _utils.fromHtml)(`<button class="btn btn-${btnKind} btn-sm"></button>`);
+  const btn = (0, _utils.fromHtml)(`<button class="btn btn-${btnKind} btn-sm mr-3"></button>`);
   btn.append(params.value);
   if (params.type !== undefined) btn.setAttribute('type', params.type);
   if (params.onclick !== undefined) btn.onclick = params.onclick;
@@ -824,7 +824,7 @@ class FormView extends _view.View {
       this._getSubsBtn = createButton({
         group: inputGroup,
         value: (0, _gettext.__)('Fill with user subscriptions'),
-        kind: 'outline-success',
+        kind: 'outline-primary',
         block: true,
         onclick: () => {
           super._emitSignal('get-subs');
