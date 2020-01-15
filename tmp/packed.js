@@ -1067,7 +1067,7 @@ const makeCallbackDispatcher = callbacks => {
 
 const asyncMain = async () => {
   const rootDiv = document.getElementById('root');
-  const subRootDiv = (0, _utils.fromHtml)(`<div style="width: 95%; margin: 0 auto;"></div>`);
+  const subRootDiv = (0, _utils.fromHtml)(`<div style="width: 98%; margin: 0 auto;"></div>`);
   rootDiv.append(subRootDiv);
   const viewManager = new _view_mgr.ViewManager(subRootDiv);
   const loadingView = new _loading_view.LoadingView();
