@@ -781,7 +781,8 @@ const createInput = params => {
 };
 
 const createButton = params => {
-  const btn = (0, _utils.fromHtml)(`<button class="btn btn-primary"></button>`);
+  const btnKind = params.kind || 'primary';
+  const btn = (0, _utils.fromHtml)(`<button class="btn btn-${btnKind} btn-sm"></button>`);
   btn.append(params.value);
   if (params.type !== undefined) btn.setAttribute('type', params.type);
   if (params.onclick !== undefined) btn.onclick = params.onclick;
@@ -823,6 +824,7 @@ class FormView extends _view.View {
       this._getSubsBtn = createButton({
         group: inputGroup,
         value: (0, _gettext.__)('Fill with user subscriptions'),
+        kind: 'outline-success',
         block: true,
         onclick: () => {
           super._emitSignal('get-subs');
@@ -852,12 +854,14 @@ class FormView extends _view.View {
       const inputGroup = createInputGroup();
       this._submitBtn = createButton({
         group: inputGroup,
-        type: 'submit',
-        value: (0, _gettext.__)('Find!')
+        kind: 'outline-primary',
+        value: (0, _gettext.__)('Find!'),
+        type: 'submit'
       });
       this._archiveBtn = createButton({
         group: inputGroup,
         value: (0, _gettext.__)('Archive'),
+        kind: 'outline-secondary',
         onclick: () => {
           super._emitSignal('open-archive');
 
