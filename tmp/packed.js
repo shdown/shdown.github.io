@@ -1421,17 +1421,7 @@ var _gettext = require("./gettext.js");
 class LoadingView extends _view.View {
   constructor() {
     super();
-    this._div = document.createElement('div');
-
-    this._div.setAttribute('class', 'spinner-grow');
-
-    this._div.setAttribute('role', 'status');
-
-    const span = document.createElement('span');
-    span.setAttribute('class', 'sr-only');
-    span.append((0, _gettext.__)('Loading…'));
-
-    this._div.append(span);
+    this._div = (0, _utils.fromHtml)(`<div class="spinner-grow" role="status"><span class="sr-only">Loading…</span></div>`);
   }
 
   get element() {
