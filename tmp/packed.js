@@ -736,14 +736,8 @@ var _gettext = require("./gettext.js");
 
 var _utils = require("./utils.js");
 
-const createDiv = text => {
-  const div = document.createElement('div');
-  div.append(text);
-  return div;
-};
-
 const createInputGroup = () => {
-  return (0, _utils.fromHtml)(`<div class="form-group"></div>`);
+  return (0, _utils.fromHtml)(`<fieldset></fieldset>`);
 };
 
 const createInput = params => {
@@ -759,16 +753,16 @@ const createInput = params => {
   let input;
 
   if (params.textarea) {
-    input = (0, _utils.fromHtml)(`<textarea class="form-control"></textarea>`);
+    input = (0, _utils.fromHtml)(`<textarea></textarea>`);
   } else {
-    input = (0, _utils.fromHtml)(`<input type="text" class="form-control"></input>`);
+    input = (0, _utils.fromHtml)(`<input type="text"></input>`);
   }
 
   if (inputId !== undefined) input.setAttribute('id', inputId);
   params.group.append(input);
 
   if (params.note !== undefined) {
-    const note = (0, _utils.fromHtml)(`<small class="form-text text-muted"></small>`);
+    const note = (0, _utils.fromHtml)(`<small></small>`);
     note.append(params.note);
     params.group.append(note);
   }
@@ -781,8 +775,7 @@ const createInput = params => {
 };
 
 const createButton = params => {
-  const btnKind = params.kind || 'primary';
-  const btn = (0, _utils.fromHtml)(`<button class="btn btn-${btnKind} btn-sm mr-1"></button>`);
+  const btn = (0, _utils.fromHtml)(`<button></button>`);
   btn.append(params.value);
   if (params.type !== undefined) btn.setAttribute('type', params.type);
   if (params.onclick !== undefined) btn.onclick = params.onclick;
@@ -824,7 +817,6 @@ class FormView extends _view.View {
       this._getSubsBtn = createButton({
         group: inputGroup,
         value: (0, _gettext.__)('Fill with user subscriptions'),
-        kind: 'primary',
         block: true,
         onclick: () => {
           super._emitSignal('get-subs');
@@ -854,14 +846,12 @@ class FormView extends _view.View {
       const inputGroup = createInputGroup();
       this._submitBtn = createButton({
         group: inputGroup,
-        kind: 'primary',
         value: (0, _gettext.__)('Find!'),
         type: 'submit'
       });
       this._archiveBtn = createButton({
         group: inputGroup,
         value: (0, _gettext.__)('Archive'),
-        kind: 'secondary',
         onclick: () => {
           super._emitSignal('open-archive');
 
@@ -920,20 +910,20 @@ class FormView extends _view.View {
 
     switch (tone) {
       case 'warning':
-        alertClass = 'alert-warning';
+        alertClass = 'warning';
         break;
 
       case 'error':
-        alertClass = 'alert-danger';
+        alertClass = 'error';
         break;
 
       case 'info':
       default:
-        alertClass = 'alert-light';
+        alertClass = 'info';
         break;
     }
 
-    const alertDiv = (0, _utils.fromHtml)(`<div class="alert ${alertClass}" role="alert"></div>`);
+    const alertDiv = (0, _utils.fromHtml)(`<div class="${alertClass}" role="alert"></div>`);
     alertDiv.append(text);
 
     this._log.append(alertDiv);
@@ -1067,9 +1057,7 @@ const makeCallbackDispatcher = callbacks => {
 
 const asyncMain = async () => {
   const rootDiv = document.getElementById('root');
-  const subRootDiv = (0, _utils.fromHtml)(`<div style="width: 98%; margin: 0 auto;"></div>`);
-  rootDiv.append(subRootDiv);
-  const viewManager = new _view_mgr.ViewManager(subRootDiv);
+  const viewManager = new _view_mgr.ViewManager(rootDiv);
   const loadingView = new _loading_view.LoadingView();
   viewManager.show(loadingView);
   const transport = new _vk_transport_connect.Transport();
@@ -1353,7 +1341,7 @@ const installGlobalErrorHandler = () => {
 
   window.onerror = (errorMsg, url, lineNum, columnNum, errorObj) => {
     rootDiv.prepend((0, _utils.fromHtml)(`
-<div class="alert alert-danger">
+<div class="error">
   ${(0, _utils.htmlEscape)(`Error: ${errorMsg} @ ${url}:${lineNum}:${columnNum}`)}
 </div>`));
     console.log('Error object:');
@@ -1448,7 +1436,9 @@ var _gettext = require("./gettext.js");
 class LoadingView extends _view.View {
   constructor() {
     super();
-    this._div = (0, _utils.fromHtml)(`<div class="spinner-grow" role="status"><span class="sr-only">Loading…</span></div>`);
+    this._div = document.createElement('div');
+
+    this._div.append((0, _gettext.__)('Loading…'));
   }
 
   get element() {
