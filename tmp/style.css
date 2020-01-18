@@ -1,6 +1,6 @@
 body {
-    background-color: #e4ede5;
-    color: #fcfcfc;
+    background-color: #f4fdf5;
+    color: #050505;
 }
 
 fieldset {
@@ -17,5 +17,5 @@ fieldset {
 
 .fv-input-note {
     font-size: smaller;
-    color: #bbb;
+    color: #bdbdbd;
 }
