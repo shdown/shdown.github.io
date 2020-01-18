@@ -863,7 +863,7 @@ class FormView extends _view.View {
 
       this._form.appendChild(fieldSet);
     }
-    this._log = document.createElement('div');
+    this._log = (0, _utils.fromHtml)('<div class="fv-form-log-area"></div>');
 
     this._form.appendChild(this._log);
 
