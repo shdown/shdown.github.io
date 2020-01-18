@@ -736,18 +736,18 @@ var _gettext = require("./gettext.js");
 
 var _utils = require("./utils.js");
 
-const createInputGroup = () => {
+const createFieldSet = () => {
   return (0, _utils.fromHtml)(`<fieldset></fieldset>`);
 };
 
 const createInput = params => {
-  const inputId = params.what === undefined ? undefined : `fv_input_${params.what}`;
+  const inputId = params.what === undefined ? undefined : `fv-input-id-${params.what}`;
 
   if (params.label !== undefined) {
-    const label = document.createElement('label');
+    const label = (0, _utils.fromHtml)('<label class="fv-input-label"></label>');
     if (inputId !== undefined) label.setAttribute('for', inputId);
     label.append(params.label);
-    params.group.append(label);
+    params.container.append(label);
   }
 
   let input;
@@ -759,12 +759,12 @@ const createInput = params => {
   }
 
   if (inputId !== undefined) input.setAttribute('id', inputId);
-  params.group.append(input);
+  params.container.append(input);
 
   if (params.note !== undefined) {
-    const note = (0, _utils.fromHtml)(`<small></small>`);
+    const note = (0, _utils.fromHtml)(`<div class="fv-input-note"></div>`);
     note.append(params.note);
-    params.group.append(note);
+    params.container.append(note);
   }
 
   if (params.extraAttributes !== undefined) {
@@ -777,21 +777,21 @@ const createInput = params => {
 const createButton = params => {
   const btn = (0, _utils.fromHtml)(`<button></button>`);
   btn.append(params.value);
+  if (params.kind !== undefined) btn.setAttribute('class', `fv-button-${params.kind}`);
   if (params.type !== undefined) btn.setAttribute('type', params.type);
   if (params.onclick !== undefined) btn.onclick = params.onclick;
-  if (params.block) btn.style = 'display: block;';
-  params.group.append(btn);
+  params.container.append(btn);
   return btn;
 };
 
 class FormView extends _view.View {
   constructor() {
     super();
-    this._form = document.createElement('form');
+    this._form = (0, _utils.fromHtml)('<form id="fv-form"></form>');
     {
-      const inputGroup = createInputGroup();
+      const fieldSet = createFieldSet();
       this._userInput = createInput({
-        group: inputGroup,
+        container: fieldSet,
         what: 'uid',
         label: (0, _gettext.__)('User'),
         note: (0, _gettext.__)('ID or handle (for example, “1” or “durov”)'),
@@ -800,12 +800,12 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGroup);
+      this._form.appendChild(fieldSet);
     }
     {
-      const inputGroup = createInputGroup();
+      const fieldSet = createFieldSet();
       this._ownersInput = createInput({
-        group: inputGroup,
+        container: fieldSet,
         what: 'oids',
         label: (0, _gettext.__)('Public list'),
         note: (0, _gettext.__)('IDs or handles; separate with commas, spaces or line feeds'),
@@ -815,9 +815,9 @@ class FormView extends _view.View {
         }
       });
       this._getSubsBtn = createButton({
-        group: inputGroup,
+        container: fieldSet,
         value: (0, _gettext.__)('Fill with user subscriptions'),
-        block: true,
+        kind: 'get-subs',
         onclick: () => {
           super._emitSignal('get-subs');
 
@@ -825,12 +825,12 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGroup);
+      this._form.appendChild(fieldSet);
     }
     {
-      const inputGroup = createInputGroup();
+      const fieldSet = createFieldSet();
       this._timeLimitInput = createInput({
-        group: inputGroup,
+        container: fieldSet,
         what: 'tl',
         label: (0, _gettext.__)('Time limits, days'),
         extraAttributes: {
@@ -840,18 +840,20 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGroup);
+      this._form.appendChild(fieldSet);
     }
     {
-      const inputGroup = createInputGroup();
+      const fieldSet = createFieldSet();
       this._submitBtn = createButton({
-        group: inputGroup,
+        container: fieldSet,
         value: (0, _gettext.__)('Find!'),
+        kind: 'find',
         type: 'submit'
       });
       this._archiveBtn = createButton({
-        group: inputGroup,
+        container: fieldSet,
         value: (0, _gettext.__)('Archive'),
+        kind: 'open-archive',
         onclick: () => {
           super._emitSignal('open-archive');
 
@@ -859,7 +861,7 @@ class FormView extends _view.View {
         }
       });
 
-      this._form.appendChild(inputGroup);
+      this._form.appendChild(fieldSet);
     }
     this._log = document.createElement('div');
 
@@ -923,7 +925,8 @@ class FormView extends _view.View {
         break;
     }
 
-    const alertDiv = (0, _utils.fromHtml)(`<div class="${alertClass}" role="alert"></div>`);
+    const alertDiv = (0, _utils.fromHtml)(`<div role="alert"></div>`);
+    alertDiv.setAttribute('class', alertClass);
     alertDiv.append(text);
 
     this._log.append(alertDiv);
@@ -945,8 +948,10 @@ const trnRu = {
   'Back': 'Назад',
   'Archive is empty.': 'Архив пуст.',
   'Comments by ': 'Комментарии ',
-  'User ID or handle (for example, “1” or “durov”):': 'ID пользователя или адрес страницы (например, “1” или “durov”):',
-  'Public list (IDs or handles); separate with commas, spaces or line feeds:': 'Список пабликов (ID или адреса страниц); разделяйте запятыми, пробелами или переводами строки:',
+  'User': 'Пользователь',
+  'ID or handle (for example, “1” or “durov”)': 'ID или адрес страницы (например, “1” или “durov”)',
+  'Public list': 'Список пабликов',
+  'IDs or handles; separate with commas, spaces or line feeds': 'ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки',
   'Fill with user subscriptions': 'Заполнить подписками пользователя',
   'Time limit, days:': 'Ограничение по времени, в днях:',
   'Find!': 'Найти!',
