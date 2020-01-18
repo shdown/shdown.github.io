@@ -832,7 +832,7 @@ class FormView extends _view.View {
       this._timeLimitInput = createInput({
         container: fieldSet,
         what: 'tl',
-        label: (0, _gettext.__)('Time limits, days:'),
+        label: (0, _gettext.__)('Time limit, days:'),
         extraAttributes: {
           type: 'number',
           value: '30',
