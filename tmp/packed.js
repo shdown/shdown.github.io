@@ -793,7 +793,7 @@ class FormView extends _view.View {
       this._userInput = createInput({
         container: fieldSet,
         what: 'uid',
-        label: (0, _gettext.__)('User'),
+        label: (0, _gettext.__)('User:'),
         note: (0, _gettext.__)('ID or handle (for example, “1” or “durov”)'),
         extraAttributes: {
           required: '1'
@@ -807,7 +807,7 @@ class FormView extends _view.View {
       this._ownersInput = createInput({
         container: fieldSet,
         what: 'oids',
-        label: (0, _gettext.__)('Public list'),
+        label: (0, _gettext.__)('Public list:'),
         note: (0, _gettext.__)('IDs or handles; separate with commas, spaces or line feeds'),
         textarea: true,
         extraAttributes: {
@@ -832,7 +832,7 @@ class FormView extends _view.View {
       this._timeLimitInput = createInput({
         container: fieldSet,
         what: 'tl',
-        label: (0, _gettext.__)('Time limits, days'),
+        label: (0, _gettext.__)('Time limits, days:'),
         extraAttributes: {
           type: 'number',
           value: '30',
@@ -948,9 +948,9 @@ const trnRu = {
   'Back': 'Назад',
   'Archive is empty.': 'Архив пуст.',
   'Comments by ': 'Комментарии ',
-  'User': 'Пользователь',
+  'User:': 'Пользователь:',
   'ID or handle (for example, “1” or “durov”)': 'ID или адрес страницы (например, “1” или “durov”)',
-  'Public list': 'Список пабликов',
+  'Public list:': 'Список пабликов:',
   'IDs or handles; separate with commas, spaces or line feeds': 'ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки',
   'Fill with user subscriptions': 'Заполнить подписками пользователя',
   'Time limit, days:': 'Ограничение по времени, в днях:',
