@@ -897,11 +897,11 @@ class FormView extends _view.View {
   mount() {
     this._log.innerHTML = '';
 
-    this._log.append((0, _gettext.__)('Hello! This app can find posts made by a specific user.'));
+    this._log.append((0, _gettext.__)('Hello! This app can find comments left by a specific user.'));
 
     this._log.append(document.createElement('br'));
 
-    this._log.append((0, _gettext.__)('It uses the execute() method, which allows checking 25 posts per request'));
+    this._log.append((0, _gettext.__)('It uses the “execute()” method, which allows checking 25 posts per request.'));
   }
 
   unmount() {}
@@ -956,8 +956,8 @@ const trnRu = {
   'Time limit, days:': 'Ограничение по времени, в днях:',
   'Find!': 'Найти!',
   'Archive': 'Архив',
-  'Hello! This app can find posts made by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
-  'It uses the execute() method, which allows checking 25 posts per request': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
+  'Hello! This app can find comments left by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
+  'It uses the “execute()” method, which allows checking 25 posts per request.': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
   'We are being too fast ({0})': 'Умерим пыл ({0})',
   'Getting server time…': 'Получаю время сервера…',
   'Checking user…': 'Проверяю пользователя…',
