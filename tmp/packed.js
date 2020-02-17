@@ -944,39 +944,39 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.__ = void 0;
 const trnRu = {
-  'Loading…': 'Загрузка…',
-  'Back': 'Назад',
+  'Another operation is in progress — please wait!': 'Другая операция ещё выполняется; пожалуйста, дождитесь её завершения.',
   'Archive is empty.': 'Архив пуст.',
-  'Comments by ': 'Комментарии ',
-  'User:': 'Пользователь:',
-  'ID or handle (for example, “1” or “durov”)': 'ID или адрес страницы (например, “1” или “durov”)',
-  'Public list:': 'Список пабликов:',
-  'IDs or handles; separate with commas, spaces or line feeds': 'ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки',
-  'Fill with user subscriptions': 'Заполнить подписками пользователя',
-  'Time limit, days:': 'Ограничение по времени, в днях:',
-  'Find!': 'Найти!',
   'Archive': 'Архив',
-  'Hello! This app can find comments left by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
-  'It uses the “execute()” method, which allows checking 25 posts per request.': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
-  'We are being too fast ({0})': 'Умерим пыл ({0})',
-  'Getting server time…': 'Получаю время сервера…',
-  'Checking user…': 'Проверяю пользователя…',
+  'Back': 'Назад',
+  'Cancel': 'Отмена',
   'Checking public list…': 'Проверяю список пабликов…',
-  'Gathering statistics…': 'Собираю статистику…',
+  'Checking user…': 'Проверяю пользователя…',
+  'Comments by ': 'Комментарии ',
+  'Error: {0}': 'Ошибка: {0}',
+  'Error checking {0}: {1}': 'Ошибка при проверке {0}: {1}',
   'Error gathering statistics: {0}': 'Ошибка при сборе статистики: {0}',
-  'Searching in {0}/{1}…': 'Ищу в {0}/{1}…',
+  'Fill with user subscriptions': 'Заполнить подписками пользователя',
+  'Find!': 'Найти!',
   '  (found {0})': ' (найдено {0})',
   'Found: {0}': 'Найдено: {0}',
-  'Error checking {0}: {1}': 'Ошибка при проверке {0}: {1}',
-  'Saving results…': 'Сохраняю результаты…',
-  'No subscriptions found!': 'Подписок не найдено!',
-  'Error: {0}': 'Ошибка: {0}',
+  'Gathering statistics…': 'Собираю статистику…',
+  'Getting server time…': 'Получаю время сервера…',
+  'Hello! This app can find comments left by a specific user.': 'Привет! Это — приложение для поиска комментариев определённого пользователя.',
+  'ID or handle (for example, “1” or “durov”)': 'ID или адрес страницы (например, “1” или “durov”)',
+  'IDs or handles; separate with commas, spaces or line feeds': 'ID или адреса страниц; разделяйте запятыми, пробелами или переводами строки',
+  'It uses the “execute()” method, which allows checking 25 posts per request.': 'Оно использует метод “execute()”, который позволяет проверять 25 постов за один запрос.',
   'Loading…': 'Загрузка…',
-  'Cancel': 'Отмена',
-  'Nothing found! 😢': 'Ничего не найдено! 😢',
-  'Posts founds:': 'Найдены посты:',
   ' (new)': ' (новый)',
-  ' (old)': ' (старый)'
+  'No subscriptions found!': 'Подписок не найдено!',
+  'Nothing found! 😢': 'Ничего не найдено! 😢',
+  ' (old)': ' (старый)',
+  'Posts found:': 'Найдены посты:',
+  'Public list:': 'Список пабликов:',
+  'Saving results…': 'Сохраняю результаты…',
+  'Searching in {0}/{1}…': 'Ищу в {0}/{1}…',
+  'Time limit, days:': 'Ограничение по времени, в днях:',
+  'User:': 'Пользователь:',
+  'We are being too fast ({0})': 'Умерим пыл ({0})'
 };
 const translations = {
   ru: trnRu,
@@ -1224,7 +1224,7 @@ const asyncMain = async () => {
           chartCtl.handleUpdate(datum);
           estimator.handleUpdate(datum);
         },
-        infoFlush: async _ => {
+        infoFlush: async () => {
           chartCtl.handleFlush();
           const currentStats = estimator.getStats();
 
@@ -1280,19 +1280,37 @@ const asyncMain = async () => {
     return result;
   };
 
+  let opInProgress = false;
   formView.subscribe('get-subs', () => {
+    if (opInProgress) {
+      formView.setLogText((0, _gettext.__)('Another operation is in progress — please wait!'),
+      /*tone=*/
+      'error');
+      return;
+    }
+
+    opInProgress = true;
     getSubscriptions(formView.userDomain).then(data => {
+      opInProgress = false;
       if (data.length === 0) formView.setLogText((0, _gettext.__)('No subscriptions found!'),
       /*tone=*/
       'warning');
       formView.ownerDomains = data;
     }).catch(err => {
+      opInProgress = false;
       formView.setLogText((0, _gettext.__)('Error: {0}', `${err.name}: ${err.message}`),
       /*tone=*/
       'error');
     });
   });
   formView.subscribe('submit', () => {
+    if (opInProgress) {
+      formView.setLogText((0, _gettext.__)('Another operation is in progress — please wait!'),
+      /*tone=*/
+      'error');
+      return;
+    }
+
     viewManager.show(progressView);
     const workConfig = {
       userDomain: formView.userDomain,
@@ -1434,8 +1452,6 @@ exports.LoadingView = void 0;
 
 var _view = require("./view.js");
 
-var _utils = require("./utils.js");
-
 var _gettext = require("./gettext.js");
 
 class LoadingView extends _view.View {
@@ -1458,7 +1474,7 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],12:[function(require,module,exports){
+},{"./gettext.js":7,"./view.js":23}],12:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
@@ -21908,7 +21924,7 @@ class ResultsView extends _view.View {
     if (data.length === 0) {
       inner.append((0, _gettext.__)('Nothing found! 😢'));
     } else {
-      inner.append((0, _gettext.__)('Posts founds:'));
+      inner.append((0, _gettext.__)('Posts found:'));
       inner.appendChild(document.createElement('br'));
       const ul = document.createElement('ul');
 
@@ -22060,7 +22076,7 @@ const htmlEntityMap = {
 };
 
 const htmlEscape = s => {
-  return String(s).replace(/[&<>"'`=\/]/g, c => htmlEntityMap[c]);
+  return String(s).replace(/[&<>"'`=/]/g, c => htmlEntityMap[c]);
 };
 
 exports.htmlEscape = htmlEscape;
