@@ -1227,8 +1227,6 @@ const asyncMain = async () => {
         infoFlush: async () => {
           chartCtl.handleFlush();
           const currentStats = estimator.getStats();
-          console.log(`currentStats:`);
-          console.log(currentStats);
 
           if (currentStats !== undefined) {
             const explicitNumerator = estimator.getDoneCommentsNumber();
@@ -1237,6 +1235,9 @@ const asyncMain = async () => {
 
             const numerator = explicitNumerator + implicitNumerator;
             const denominator = explicitDenominator + implicitDenominator;
+            console.log(`numerator = ${explicitNumerator} + ${implicitNumerator} = ${numerator}`);
+            console.log(`denominator = ${explicitDenominator} + ${implicitDenominator} = ${denominator}`);
+            console.log(`ratio = ${numerator / denominator}`);
             progressView.setProgress(numerator / denominator);
           }
         },
