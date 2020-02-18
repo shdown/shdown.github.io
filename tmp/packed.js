@@ -1227,6 +1227,8 @@ const asyncMain = async () => {
         infoFlush: async () => {
           chartCtl.handleFlush();
           const currentStats = estimator.getStats();
+          console.log(`currentStats:`);
+          console.log(currentStats);
 
           if (currentStats !== undefined) {
             const explicitNumerator = estimator.getDoneCommentsNumber();
@@ -21429,7 +21431,6 @@ class ProgressView extends _view.View {
   }
 
   setProgress(ratio) {
-    console.log(`ProgressView#setProgress(${ratio})`);
     const v = isNaN(ratio) ? '' : String(Math.round(ratio * PROGRESS_MAX));
 
     this._progress.setAttribute('value', v);
