@@ -21429,6 +21429,7 @@ class ProgressView extends _view.View {
   }
 
   setProgress(ratio) {
+    console.log(`ProgressView#setProgress(${ratio})`);
     const v = isNaN(ratio) ? '' : String(Math.round(ratio * PROGRESS_MAX));
 
     this._progress.setAttribute('value', v);
@@ -22251,7 +22252,6 @@ class VkApiSession {
 
   setRateLimitCallback(fn) {
     this._rateLimitCallback = fn;
-    return this;
   }
 
   async _limitRate(reason, delayMillis) {
@@ -22286,8 +22286,7 @@ class VkApiSession {
             break;
 
           case 9:
-            // this one was not seen in practice, but still...
-            await this._limitRate('rateLimitHard', 9000);
+            await this._limitRate('rateLimitHard', 5000);
             break;
 
           case 1:
@@ -22371,7 +22370,6 @@ class VkRequest {
 
   on(key, fn) {
     this.callbacks[key] = fn;
-    return this;
   }
 
   schedule() {
@@ -22402,7 +22400,10 @@ exports.VkRequestError = VkRequestError;
 
 const vkSendRequest = (method, successKey, failureKey, params) => {
   return new Promise((resolve, reject) => {
-    new VkRequest(method, params).on(successKey, resolve).on(failureKey, data => reject(new VkRequestError(data))).schedule();
+    const r = new VkRequest(method, params);
+    r.on(successKey, resolve);
+    r.on(failureKey, data => reject(new VkRequestError(data)));
+    r.schedule();
   });
 };
 
