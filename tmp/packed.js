@@ -1187,12 +1187,7 @@ const asyncMain = async () => {
     let implicitNumerator = 0;
     let implicitDenominator = 0;
 
-    for (const oid in stats) {
-      const stat = stats[oid];
-      console.log(`(!!!) stats: key=${oid}, value=`);
-      console.log(stat);
-      implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stat, timeLimit);
-    }
+    for (const oid in stats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats[oid], timeLimit);
 
     const result = [];
 
@@ -21982,6 +21977,8 @@ exports.StatsStorage = void 0;
 
 var _intcodec = require("./intcodec.js");
 
+var _stats_utils = require("./stats_utils.js");
+
 class StatsStorage {
   constructor(storage) {
     this._storage = storage;
@@ -21995,10 +21992,12 @@ class StatsStorage {
 
     for (const entry of entries) {
       const [ownerId, totalComments, timeSpan] = (0, _intcodec.decodeManyIntegers)(entry);
-      this._data[ownerId] = {
+      const stat = {
         totalComments: totalComments,
         timeSpan: timeSpan
-      };
+      }; // The storage may contain junk -- e.g. data written by older versions; let's check it.
+
+      if ((0, _stats_utils.isStatsValid)(stat)) this._data[ownerId] = stat;
     }
   }
 
@@ -22018,7 +22017,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":10}],21:[function(require,module,exports){
+},{"./intcodec.js":10,"./stats_utils.js":21}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
