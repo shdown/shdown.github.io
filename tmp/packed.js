@@ -1189,6 +1189,7 @@ const asyncMain = async () => {
 
     for (const oid in stats) implicitDenominator += _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stats[oid], timeLimit);
 
+    console.log(`[init/sum] implicitDenominator = ${implicitDenominator}`);
     const result = [];
 
     for (let i = 0; i < oids.length; ++i) {
@@ -1199,6 +1200,7 @@ const asyncMain = async () => {
       if (result.length !== 0) statusText += (0, _gettext.__)(' (found {0})', `${result.length}`);
       progressView.setLogText(statusText);
       implicitDenominator -= _progress_estimator.ProgressEstimator.statsToExpectedCommentsCount(stat, timeLimit);
+      console.log(`[subtracted] implicitDenominator = ${implicitDenominator}`);
       const estimator = new _progress_estimator.ProgressEstimator();
       const chartCtl = new _chart_ctl.ChartController(30, progressView.chartView);
       const callbacks = {
@@ -1259,6 +1261,7 @@ const asyncMain = async () => {
       const commentsChecked = estimator.getDoneCommentsNumber();
       implicitNumerator += commentsChecked;
       implicitDenominator += commentsChecked;
+      console.log(`[added] implicitDenominator = ${implicitDenominator}`);
       const actualStats = estimator.getStats();
       if (actualStats !== undefined) await statsStorage.setStats(parseInt(oid), actualStats,
       /*isApprox=*/
