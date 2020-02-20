@@ -408,6 +408,8 @@ class ArchiveView extends _view.View {
 
     this._backBtn.setAttribute('type', 'button');
 
+    this._backBtn.setAttribute('class', 'av-button-back');
+
     this._backBtn.setAttribute('value', (0, _gettext.__)('Back'));
 
     this._backBtn.onclick = () => {
@@ -440,7 +442,6 @@ class ArchiveView extends _view.View {
         inner.appendChild(document.createElement('hr'));
         inner.append((0, _gettext.__)('Comments by '));
         inner.appendChild((0, _utils.createAnchor)((0, _vk_url.vkEntityUrl)(entityId)));
-        inner.append(':');
         inner.appendChild(document.createElement('br'));
         const ul = document.createElement('ul');
 
@@ -21387,9 +21388,9 @@ class ProgressView extends _view.View {
     this._div = document.createElement('div');
     this._progress = document.createElement('progress');
 
-    this._progress.setAttribute('max', String(PROGRESS_MAX));
+    this._progress.setAttribute('class', 'pv-progress-bar');
 
-    this._progress.style = 'display: block; width: 100%;';
+    this._progress.setAttribute('max', String(PROGRESS_MAX));
 
     this._div.appendChild(this._progress);
 
@@ -21402,6 +21403,8 @@ class ProgressView extends _view.View {
 
     this._cancelBtn.setAttribute('type', 'button');
 
+    this._cancelBtn.setAttribute('class', 'pv-button-cancel');
+
     this._cancelBtn.setAttribute('value', (0, _gettext.__)('Cancel'));
 
     this._cancelBtn.onclick = () => {
@@ -21411,7 +21414,8 @@ class ProgressView extends _view.View {
     };
 
     this._log = document.createElement('span');
-    this._log.style = 'margin-left: 1em;';
+
+    this._log.setAttribute('class', 'pv-log-text');
 
     this._bottom.appendChild(this._cancelBtn);
 
@@ -21892,6 +21896,8 @@ class ResultsView extends _view.View {
 
     this._backBtn.setAttribute('type', 'button');
 
+    this._backBtn.setAttribute('class', 'rv-button-back');
+
     this._backBtn.setAttribute('value', (0, _gettext.__)('Back'));
 
     this._backBtn.onclick = () => {
@@ -21934,10 +21940,10 @@ class ResultsView extends _view.View {
         const span = document.createElement('span');
 
         if (datum.isNew) {
-          span.style = 'font-weight: bold;';
+          span.setAttribute('class', 'rv-li-note-new');
           span.append((0, _gettext.__)(' (new)'));
         } else {
-          span.style = 'color: #999;';
+          span.setAttribute('class', 'rv-li-note-old');
           span.append((0, _gettext.__)(' (old)'));
         }
 
