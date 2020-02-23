@@ -21601,6 +21601,7 @@ class Hardware {
         false,
         /*forwardErrors=*/
         true);
+        break;
       } catch (err) {
         if (!(err instanceof _vk_api.VkApiError) || err.code !== 9) {
           await this._session.handleOrThrow(err);
