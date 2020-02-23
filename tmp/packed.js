@@ -72,13 +72,26 @@ class Reader {
   }
 
   async _repopulateCache() {
-    const result = await this._config.session.apiRequest('wall.get', {
-      owner_id: this._config.oid,
-      offset: this._globalOffset,
-      count: MAX_POSTS,
-      v: '5.101'
-    }); // Let's explicitly copy the slice -- I don't trust modern JS engines not to introduce a
+    let result;
+
+    try {
+      result = await this._config.session.apiRequest('wall.get', {
+        owner_id: this._config.oid,
+        offset: this._globalOffset,
+        count: MAX_POSTS,
+        v: '5.101'
+      });
+    } catch (err) {
+      if (!(err instanceof _vk_api.VkApiError)) throw err;
+      await this._config.callback('error', {
+        what: err,
+        when: `wall.get(), offset=${this._globalOffset}`
+      });
+      await this._setEOF('error');
+      return;
+    } // Let's explicitly copy the slice -- I don't trust modern JS engines not to introduce a
     // memory leak here.
+
 
     const newCache = [...this._cache.slice(this._cachePos)];
 
@@ -289,8 +302,8 @@ const findPosts = async config => {
       } catch (err2) {
         if (!(err2 instanceof _vk_api.VkApiError)) throw err2;
         await config.callback('error', {
-          postId: firstValue.id,
-          error: err2
+          what: err2,
+          when: `wall.getComments(), post_id=${firstValue.id}`
         }); // Let's just skip this one.
 
         amountsById = {};
@@ -327,7 +340,7 @@ const gatherStatsBatch = async (config, batch, result) => {
       if (!(err instanceof _vk_api.VkApiError)) throw err;
       if (err.code !== 13) throw err;
       await config.callback('error', {
-        error: err
+        what: err
       });
     }
   }
@@ -954,7 +967,7 @@ const trnRu = {
   'Checking user…': 'Проверяю пользователя…',
   'Comments by ': 'Комментарии ',
   'Error: {0}': 'Ошибка: {0}',
-  'Error checking {0}: {1}': 'Ошибка при проверке {0}: {1}',
+  'Error checking {0} at {1}: {2}': 'Ошибка проверки {0} при {1}: {2}',
   'Error gathering statistics: {0}': 'Ошибка при сборе статистики: {0}',
   'Fill with user subscriptions': 'Заполнить подписками пользователя',
   'Find!': 'Найти!',
@@ -1145,7 +1158,7 @@ const asyncMain = async () => {
           progressView.setProgress(datum.numerator / datum.denominator);
         },
         error: async datum => {
-          const error = datum.error;
+          const error = datum.what;
           progressView.setLogText((0, _gettext.__)('Error gathering statistics: {0}', `${error.name}: ${error.message}`));
         }
       })
@@ -1240,8 +1253,9 @@ const asyncMain = async () => {
           }
         },
         error: async datum => {
-          const error = datum.error;
-          progressView.setLogText((0, _gettext.__)('Error checking {0}: {1}', `${oid}_${datum.postId}`, `${error.name}: ${error.message}`));
+          const error = datum.what;
+          const when = datum.when;
+          progressView.setLogText((0, _gettext.__)('Error checking {0} at {1}: {2}', oid, when, `${error.name}: ${error.message}`));
           console.log('error callback payload:');
           console.log(error);
         }
