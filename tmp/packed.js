@@ -21590,22 +21590,25 @@ class Hardware {
   }
 
   async write(rawKey, value) {
-    try {
-      await this._session.apiRequest('storage.set', {
-        key: rawKey,
-        value: value,
-        v: '5.103'
-      },
-      /*raw=*/
-      false,
-      /*forwardErrors=*/
-      {
-        9: true
-      });
-    } catch (err) {
-      if (!(err instanceof _vk_api.VkApiError)) throw err;
-      if (err.code !== 9) throw err;
-      throw new HardwareRateLimitError();
+    while (true) {
+      try {
+        await this._session.apiRequest('storage.set', {
+          key: rawKey,
+          value: value,
+          v: '5.103'
+        },
+        /*raw=*/
+        false,
+        /*forwardErrors=*/
+        true);
+      } catch (err) {
+        if (!(err instanceof _vk_api.VkApiError) || err.code !== 9) {
+          await this._session.handleOrThrow(err);
+          continue;
+        }
+
+        throw new HardwareRateLimitError();
+      }
     }
   }
 
@@ -22280,37 +22283,40 @@ class VkApiSession {
     return raw ? result : result.response;
   }
 
-  async apiRequest(method, params, raw = false, forwardErrors = undefined) {
+  async handleOrThrow(err) {
+    if (!(err instanceof VkApiError)) throw err; // https://vk.com/dev/errors
+
+    switch (err.code) {
+      case 6:
+        await this._limitRate('rateLimit', 3000);
+        break;
+
+      case 9:
+        await this._limitRate('rateLimitHard', 5000);
+        break;
+
+      case 1:
+      case 10:
+        await this._limitRate('serverUnavailable', 1000);
+        break;
+
+      default:
+        throw err;
+    }
+  }
+
+  async apiRequest(method, params, raw = false, forwardErrors = false) {
     while (true) {
       try {
         return await this._apiRequestNoRateLimit(method, params, raw);
       } catch (err) {
-        if (!(err instanceof VkApiError)) throw err;
-        const code = err.code;
-        if (forwardErrors !== undefined && forwardErrors[code]) throw err; // https://vk.com/dev/errors
-
-        switch (code) {
-          case 6:
-            await this._limitRate('rateLimit', 3000);
-            break;
-
-          case 9:
-            await this._limitRate('rateLimitHard', 5000);
-            break;
-
-          case 1:
-          case 10:
-            await this._limitRate('serverUnavailable', 1000);
-            break;
-
-          default:
-            throw err;
-        }
+        if (forwardErrors) throw err;
+        await this.handleOrThrow(err);
       }
     }
   }
 
-  async apiExecuteRaw(params, forwardErrors = undefined) {
+  async apiExecuteRaw(params, forwardErrors = false) {
     const result = await this.apiRequest('execute', params,
     /*raw=*/
     true, forwardErrors);
