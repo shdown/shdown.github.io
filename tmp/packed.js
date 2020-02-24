@@ -37,7 +37,7 @@ const requestAccessToken = async scope => {
 
 exports.requestAccessToken = requestAccessToken;
 
-},{"./global_config.js":8,"./utils.js":22,"./vk_transport_connect.js":26}],2:[function(require,module,exports){
+},{"./global_config.js":9,"./utils.js":23,"./vk_transport_connect.js":27}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -127,7 +127,7 @@ class Reader {
       newCache.push(value);
     }
 
-    await this._config.callback('infoFlush', null);
+    await this._config.callback('infoFlush');
     this._cache = newCache;
     this._cachePos = 0;
     if (result.items.length < MAX_POSTS) await this._setEOF('noMorePosts');
@@ -205,7 +205,7 @@ class HotGroup {
       if (!expellThis) newHotArray.push(value);
     }
 
-    await this._config.callback('infoFlush', null);
+    await this._config.callback('infoFlush');
     this._hotArray = newHotArray;
   }
 
@@ -238,7 +238,7 @@ const foolProofExecute = async (config, params) => {
   const {
     response,
     errors
-  } = await config.session.apiExecuteRaw(params);
+  } = await config.session.apiExecute(params);
   if (errors.length === 0 || Array.isArray(response)) return response;
   throw errors[0];
 };
@@ -319,7 +319,7 @@ const findPosts = async config => {
 exports.findPosts = findPosts;
 
 const gatherStatsBatch = async (config, batch, result) => {
-  let executeResult = undefined;
+  let executeResult = null;
 
   for (let count = MAX_COMMENTS; count > 1; count >>= 1) {
     let code = `var i = 0, r = [];`;
@@ -345,7 +345,7 @@ const gatherStatsBatch = async (config, batch, result) => {
     }
   }
 
-  if (executeResult === undefined) return;
+  if (executeResult === null) return;
 
   for (let i = 0; i < batch.length; ++i) {
     const ownerDatum = executeResult[i];
@@ -397,7 +397,7 @@ const gatherStats = async config => {
 
 exports.gatherStats = gatherStats;
 
-},{"./stats_utils.js":21,"./utils.js":22,"./vk_api.js":25}],3:[function(require,module,exports){
+},{"./stats_utils.js":22,"./utils.js":23,"./vk_api.js":26}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -484,7 +484,7 @@ class ArchiveView extends _view.View {
 
 exports.ArchiveView = ArchiveView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23,"./vk_url.js":27}],4:[function(require,module,exports){
+},{"./gettext.js":8,"./utils.js":23,"./view.js":24,"./vk_url.js":28}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -551,7 +551,8 @@ class ChartController {
 
     while (i !== -1 && this._bars[i] === null) --i;
 
-    if (i !== this._bars.length - 1) this._assign(i + 1, value);
+    ++i;
+    if (i !== this._bars.length) this._assign(i, value);
   }
 
   handleUpdate(value) {
@@ -736,7 +737,60 @@ class ChartView extends _view.View {
 
 exports.ChartView = ChartView;
 
-},{"./utils.js":22,"./view.js":23,"chart.js":13}],6:[function(require,module,exports){
+},{"./utils.js":23,"./view.js":24,"chart.js":14}],6:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.Context = exports.ContextCancellation = void 0;
+
+var _utils = require("./utils.js");
+
+class ContextCancellation extends Error {
+  constructor() {
+    super('Cancellation');
+    this.name = 'ContextCancellation';
+  }
+
+}
+
+exports.ContextCancellation = ContextCancellation;
+
+class Context {
+  constructor(maxLagMillis) {
+    this._cancelFlag = false;
+    this._maxLagMillis = maxLagMillis;
+  }
+
+  setCancelFlag(flag) {
+    this._cancelFlag = flag;
+  }
+
+  maybeThrowForCancel() {
+    if (this._cancelFlag) {
+      this._cancelFlag = false;
+      throw new ContextCancellation();
+    }
+  }
+
+  async sleepMillis(ms) {
+    const max_lag = this._maxLagMillis;
+
+    for (; ms > max_lag; ms -= max_lag) {
+      this.maybeThrowForCancel();
+      await (0, _utils.sleepMillis)(max_lag);
+    }
+
+    this.maybeThrowForCancel();
+    await (0, _utils.sleepMillis)(ms);
+  }
+
+}
+
+exports.Context = Context;
+
+},{"./utils.js":23}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -950,7 +1004,7 @@ class FormView extends _view.View {
 
 exports.FormView = FormView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],7:[function(require,module,exports){
+},{"./gettext.js":8,"./utils.js":23,"./view.js":24}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1016,7 +1070,7 @@ const __ = (text, ...args) => {
 
 exports.__ = __;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1028,7 +1082,7 @@ const GLOBAL_CONFIG = {
 };
 exports.GLOBAL_CONFIG = GLOBAL_CONFIG;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 var _gettext = require("./gettext.js");
@@ -1040,6 +1094,8 @@ var _access_token = require("./access_token.js");
 var _vk_transport_connect = require("./vk_transport_connect.js");
 
 var _vk_api = require("./vk_api.js");
+
+var _context = require("./context.js");
 
 var _algo = require("./algo.js");
 
@@ -1083,7 +1139,10 @@ const asyncMain = async () => {
   transport.setAccessToken((await (0, _access_token.requestAccessToken)(
   /*scope=*/
   '')));
-  const session = new _vk_api.VkApiSession(transport);
+  const context = new _context.Context(
+  /*maxLagMillis=*/
+  200);
+  const session = new _vk_api.VkApiSession(transport, context);
   const storage = new _rate_limited_storage.RateLimitedStorage(
   /*limits=*/
   {
@@ -1150,8 +1209,9 @@ const asyncMain = async () => {
     progressView.setLogText((0, _gettext.__)('Gathering statistics…'));
     progressView.setProgress(0);
     const gatherResults = await (0, _algo.gatherStats)({
-      oids: oidsToGatherStats,
       session: session,
+      context: context,
+      oids: oidsToGatherStats,
       ignorePinned: resolveConfig.ignorePinned,
       callback: makeCallbackDispatcher({
         progress: async datum => {
@@ -1262,6 +1322,7 @@ const asyncMain = async () => {
       };
       await (0, _algo.findPosts)({
         session: session,
+        context: context,
         oid: oid,
         uid: uid,
         sinceTimestamp: sinceTimestamp,
@@ -1279,7 +1340,7 @@ const asyncMain = async () => {
 
     while (storage.hasSomethingToFlush()) {
       progressView.setLogText((0, _gettext.__)('Saving results…'));
-      await (0, _utils.sleepMillis)(200);
+      await context.sleepMillis(200);
       await storage.flush();
     }
 
@@ -1334,15 +1395,15 @@ const asyncMain = async () => {
       ignorePinned: false
     };
     work(workConfig).then(results => {
-      session.setCancelFlag(false);
+      context.setCancelFlag(false);
       session.setRateLimitCallback(null);
       viewManager.show(resultsView);
       resultsView.setResults(results);
     }).catch(err => {
-      session.setCancelFlag(false);
+      context.setCancelFlag(false);
       session.setRateLimitCallback(null);
 
-      if (err instanceof _vk_api.VkApiCancellation) {
+      if (err instanceof _context.ContextCancellation) {
         viewManager.show(formView);
       } else {
         viewManager.show(resultsView);
@@ -1369,7 +1430,7 @@ const asyncMain = async () => {
     viewManager.show(formView);
   });
   progressView.subscribe('cancel', () => {
-    session.setCancelFlag(true);
+    context.setCancelFlag(true);
   });
   viewManager.show(formView);
 };
@@ -1396,7 +1457,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./form_view.js":6,"./gettext.js":7,"./loading_view.js":11,"./posts_storage.js":15,"./progress_estimator.js":16,"./progress_view.js":17,"./rate_limited_storage.js":18,"./results_view.js":19,"./stats_storage.js":20,"./utils.js":22,"./view_mgr.js":24,"./vk_api.js":25,"./vk_transport_connect.js":26,"./vk_url.js":27}],10:[function(require,module,exports){
+},{"./access_token.js":1,"./algo.js":2,"./archive_view.js":3,"./chart_ctl.js":4,"./context.js":6,"./form_view.js":7,"./gettext.js":8,"./loading_view.js":12,"./posts_storage.js":16,"./progress_estimator.js":17,"./progress_view.js":18,"./rate_limited_storage.js":19,"./results_view.js":20,"./stats_storage.js":21,"./utils.js":23,"./view_mgr.js":25,"./vk_api.js":26,"./vk_transport_connect.js":27,"./vk_url.js":28}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1457,7 +1518,7 @@ const decodeManyIntegers = s => s.split(',').map(decodeInteger);
 
 exports.decodeManyIntegers = decodeManyIntegers;
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1489,12 +1550,12 @@ class LoadingView extends _view.View {
 
 exports.LoadingView = LoadingView;
 
-},{"./gettext.js":7,"./view.js":23}],12:[function(require,module,exports){
+},{"./gettext.js":8,"./view.js":24}],13:[function(require,module,exports){
 (function (global){
 !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n():"function"==typeof define&&define.amd?define(n):(e=e||self).vkConnect=n()}(this,function(){"use strict";var i=function(){return(i=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function p(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}var n=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites"],a=[],s=null,e="undefined"!=typeof window,t=e&&window.webkit&&void 0!==window.webkit.messageHandlers&&void 0!==window.webkit.messageHandlers.VKWebAppClose,o=e?window.AndroidBridge:void 0,r=t?window.webkit.messageHandlers:void 0,u=e&&!o&&!r,d=u?"message":"VKWebAppEvent";function f(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}e&&(window.CustomEvent||(window.CustomEvent=(f.prototype=Event.prototype,f)),window.addEventListener(d,function(){for(var n=[],e=0;e<arguments.length;e++)n[e]=arguments[e];var t=function(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}(a);if(u&&n[0]&&"data"in n[0]){var o=n[0].data,r=(o.webFrameId,o.connectVersion,p(o,["webFrameId","connectVersion"]));r.type&&"VKWebAppSettings"===r.type?s=r.frameId:t.forEach(function(e){e({detail:r})})}else t.forEach(function(e){e.apply(null,n)})}));function l(e,n){void 0===n&&(n={}),o&&"function"==typeof o[e]&&o[e](JSON.stringify(n)),r&&r[e]&&"function"==typeof r[e].postMessage&&r[e].postMessage(n),u&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:s,connectVersion:"1.6.8"},"*")}function c(e){a.push(e)}var b,v,w,A={send:l,subscribe:c,sendPromise:(b=l,v=c,w=function(){var t={current:0,next:function(){return this.current+=1,this.current}},r={};return{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}}}(),v(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=p(n,["request_id"]);t&&w.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return new Promise(function(e,n){var t=w.add({resolve:e,reject:n});b(o,i(i({},r),{request_id:t}))})}),unsubscribe:function(e){var n=a.indexOf(e);-1<n&&a.splice(n,1)},isWebView:function(){return!(!o&&!r)},supports:function(e){return!(!o||"function"!=typeof o[e])||(!(!r||!r[e]||"function"!=typeof r[e].postMessage)||!(r||o||!n.includes(e)))}};if("object"!=typeof exports||"undefined"==typeof module){var y=null;"undefined"!=typeof window?y=window:"undefined"!=typeof global?y=global:"undefined"!=typeof self&&(y=self),y&&(y.vkConnect=A,y.vkuiConnect=A)}return A});
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 
 /*!
@@ -16628,7 +16689,7 @@ exports.LoadingView = LoadingView;
   return src;
 });
 
-},{"moment":14}],14:[function(require,module,exports){
+},{"moment":15}],15:[function(require,module,exports){
 //! moment.js
 
 ;(function (global, factory) {
@@ -21232,7 +21293,7 @@ exports.LoadingView = LoadingView;
 
 })));
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21320,7 +21381,7 @@ class PostsStorage {
 
 exports.PostsStorage = PostsStorage;
 
-},{"./intcodec.js":10}],16:[function(require,module,exports){
+},{"./intcodec.js":11}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21380,7 +21441,7 @@ class ProgressEstimator {
 
 exports.ProgressEstimator = ProgressEstimator;
 
-},{"./stats_utils.js":21}],17:[function(require,module,exports){
+},{"./stats_utils.js":22}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21474,7 +21535,7 @@ class ProgressView extends _view.View {
 
 exports.ProgressView = ProgressView;
 
-},{"./chart_view.js":5,"./gettext.js":7,"./view.js":23}],18:[function(require,module,exports){
+},{"./chart_view.js":5,"./gettext.js":8,"./view.js":24}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21606,23 +21667,15 @@ class Hardware {
   async write(rawKey, value) {
     while (true) {
       try {
-        await this._session.apiRequest('storage.set', {
+        await this._session.apiRequestForwardErrors('storage.set', {
           key: rawKey,
           value: value,
           v: '5.103'
-        },
-        /*raw=*/
-        false,
-        /*forwardErrors=*/
-        true);
+        });
         break;
       } catch (err) {
-        if (!(err instanceof _vk_api.VkApiError) || err.code !== 9) {
-          await this._session.handleOrThrow(err);
-          continue;
-        }
-
-        throw new HardwareRateLimitError();
+        if (err instanceof _vk_api.VkApiError && err.code === 9) throw new HardwareRateLimitError();
+        await this._session.handleOrThrow(err);
       }
     }
   }
@@ -21892,7 +21945,7 @@ class RateLimitedStorage {
 
 exports.RateLimitedStorage = RateLimitedStorage;
 
-},{"./intcodec.js":10,"./utils.js":22,"./vk_api.js":25}],19:[function(require,module,exports){
+},{"./intcodec.js":11,"./utils.js":23,"./vk_api.js":26}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -21991,7 +22044,7 @@ class ResultsView extends _view.View {
 
 exports.ResultsView = ResultsView;
 
-},{"./gettext.js":7,"./utils.js":22,"./view.js":23}],20:[function(require,module,exports){
+},{"./gettext.js":8,"./utils.js":23,"./view.js":24}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22041,7 +22094,7 @@ class StatsStorage {
 
 exports.StatsStorage = StatsStorage;
 
-},{"./intcodec.js":10,"./stats_utils.js":21}],21:[function(require,module,exports){
+},{"./intcodec.js":11,"./stats_utils.js":22}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22055,7 +22108,7 @@ const isStatsValid = stats => {
 
 exports.isStatsValid = isStatsValid;
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22145,7 +22198,7 @@ const createAnchor = link => {
 
 exports.createAnchor = createAnchor;
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22173,7 +22226,7 @@ class View {
 
 exports.View = View;
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22210,13 +22263,13 @@ class ViewManager {
 
 exports.ViewManager = ViewManager;
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.VkApiSession = exports.VkApiCancellation = exports.VkApiError = void 0;
+exports.VkApiSession = exports.VkApiError = void 0;
 
 var _utils = require("./utils.js");
 
@@ -22231,50 +22284,15 @@ class VkApiError extends Error {
 }
 
 exports.VkApiError = VkApiError;
-
-class VkApiCancellation extends Error {
-  constructor() {
-    super('Cancellation');
-    this.name = 'VkApiCancellation';
-  }
-
-}
-
-exports.VkApiCancellation = VkApiCancellation;
 const MIN_DELAY_MILLIS = 360;
 
 class VkApiSession {
-  constructor(transport) {
+  constructor(transport, context) {
     this._transport = transport;
+    this._context = context;
     this._rateLimitCallback = null;
     this._lastRequestTimestamp = -Infinity;
     this._cancelFlag = false;
-  }
-
-  _maybeThrowForCancel() {
-    if (this._cancelFlag) {
-      this._cancelFlag = false;
-      throw new VkApiCancellation();
-    }
-  }
-
-  async _sleepMillis(ms) {
-    const MAX_LAG = 200;
-
-    while (ms >= MAX_LAG) {
-      this._maybeThrowForCancel();
-
-      await (0, _utils.sleepMillis)(MAX_LAG);
-      ms -= MAX_LAG;
-    }
-
-    this._maybeThrowForCancel();
-
-    await (0, _utils.sleepMillis)(ms);
-  }
-
-  setCancelFlag(flag) {
-    this._cancelFlag = flag;
   }
 
   setRateLimitCallback(fn) {
@@ -22282,16 +22300,16 @@ class VkApiSession {
   }
 
   async _limitRate(reason, delayMillis) {
-    if (this._rateLimitCallback) this._rateLimitCallback(reason);
-    await this._sleepMillis(delayMillis);
+    if (this._rateLimitCallback !== null) this._rateLimitCallback(reason);
+    await this._context.sleepMillis(delayMillis);
   }
 
-  async _apiRequestNoRateLimit(method, params, raw) {
+  async apiRequestForwardErrors(method, params, raw) {
     const now = (0, _utils.monotonicNowMillis)();
     const delay = now - this._lastRequestTimestamp;
-    if (delay < MIN_DELAY_MILLIS) await this._sleepMillis(MIN_DELAY_MILLIS - delay);
+    if (delay < MIN_DELAY_MILLIS) await this._context.sleepMillis(MIN_DELAY_MILLIS - delay);
 
-    this._maybeThrowForCancel();
+    this._context.maybeThrowForCancel();
 
     this._lastRequestTimestamp = (0, _utils.monotonicNowMillis)();
     const result = await this._transport.callAPI(method, params);
@@ -22320,21 +22338,20 @@ class VkApiSession {
     }
   }
 
-  async apiRequest(method, params, raw = false, forwardErrors = false) {
+  async apiRequest(method, params, raw = false) {
     while (true) {
       try {
-        return await this._apiRequestNoRateLimit(method, params, raw);
+        return await this.apiRequestForwardErrors(method, params, raw);
       } catch (err) {
-        if (forwardErrors) throw err;
         await this.handleOrThrow(err);
       }
     }
   }
 
-  async apiExecuteRaw(params, forwardErrors = false) {
+  async apiExecute(params) {
     const result = await this.apiRequest('execute', params,
     /*raw=*/
-    true, forwardErrors);
+    true);
     const errors = result.execute_errors || [];
     return {
       response: result.response,
@@ -22346,7 +22363,7 @@ class VkApiSession {
 
 exports.VkApiSession = VkApiSession;
 
-},{"./utils.js":22}],26:[function(require,module,exports){
+},{"./utils.js":23}],27:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22479,7 +22496,7 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":25,"@vkontakte/vk-connect":12}],27:[function(require,module,exports){
+},{"./vk_api.js":26,"@vkontakte/vk-connect":13}],28:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -22499,4 +22516,4 @@ const vkPostUrl = (ownerId, postId) => {
 
 exports.vkPostUrl = vkPostUrl;
 
-},{}]},{},[9]);
+},{}]},{},[10]);
