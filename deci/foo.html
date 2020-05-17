@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+
+<script type="module">
+  async function init() {
+    const { instance } = await WebAssembly.instantiateStreaming(
+      fetch("./deci.wasm")
+    );
+
+    const a = new Uint16Array(1);
+    a[0] = 15;
+
+    const b = new Uint16Array(1);
+    b[0] = 93;
+
+    const carry = instance.exports.deci_add(
+        a.buffer, a.length,
+        b.buffer, b.length);
+
+    console.log(carry);
+    console.log(a);
+  }
+  init();
+</script>
