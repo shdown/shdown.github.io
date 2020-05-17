@@ -224,10 +224,15 @@ const _from_html = (html) => {
 const wasmInstantiateFromSource = async (source) => {
     if (WebAssembly.instantiateStreaming !== undefined) {
         return await WebAssembly.instantiateStreaming(source);
-    } else {
-        const module = await WebAssembly.compileStreaming(source);
-        return await WebAssembly.instantiate(module);
     }
+
+    let module;
+    if (WebAssembly.compileStreaming !== undefined) {
+        module = await WebAssembly.compileStreaming(source);
+    } else {
+        module = await WebAssembly.compile(source);
+    }
+    return await WebAssembly.instantiate(module);
 };
 
 const async_main = async () => {
