@@ -1,22 +1,151 @@
 <!DOCTYPE html>
 
 <script type="module">
-    async function init() {
-        const { instance } = await WebAssembly.instantiateStreaming(fetch("./deci.wasm"));
 
-        const memory = instance.exports.memory;
-        console.log(memory);
+const DECI_BASE_LOG = 4;
+const DECI_BASE = 10000;
+const DECI_WORD_BYTES = 2;
+const DECI_UINTXX_ARRAY_CLASS = Uint16Array;
 
-        const view = new Uint16Array(memory.buffer);
-        view[0] = 9283;
-        view[1] = 3061;
+const _div_ceil = (a, b) => Math.ceil(a / b);
 
-        const carry = instance.exports.deci_add(
-            0, 2,
-            2, 4);
+const EFORMAT = -1;
+const ETOOBIG = -2;
 
-        console.log(carry);
-        console.log(view[0]);
+const deci_from_str = (s, memory_view, i, out_max) => {
+    const m = s.match(/^0*([0-9]*)$/);
+    if (m === null)
+        return EFORMAT;
+    s = m[1];
+
+    const ns = s.length;
+    const nout = _div_ceil(ns, DECI_BASE_LOG);
+    if (nout > out_max)
+        return ETOOBIG;
+
+    let si = ns;
+    for (;;) {
+        const si_1 = si - DECI_BASE_LOG;
+        if (si_1 < 0)
+            break;
+        memory_view[i++] = parseInt(s.slice(si_1, si));
+        si = si_1;
     }
-    init();
+    if (si !== 0) {
+        memory_view[i++] = parseInt(s.slice(0, si));
+    }
+    return i;
+};
+
+const deci_to_str = (memory_view, i_begin, i_end) => {
+    if (i_begin === i_end)
+        return '0';
+
+    --i_end;
+    let s = memory_view[i_end].toString();
+
+    while (i_end !== i_begin) {
+        --i_end;
+        s += (memory_view[i_end] + DECI_BASE).toString().slice(1);
+    }
+
+    return s;
+};
+
+const deci_normalize = (memory_view, i_begin, i_end) => {
+    while (i_end !== i_begin && memory_view[i_end - 1] === 0)
+        --i_end;
+    return i_end;
+};
+
+class Span {
+    constructor(i_begin, i_end) {
+        this.i_begin = i_begin;
+        this.i_end = i_end;
+    }
+
+    size() {
+        return this.i_end - this.i_begin;
+    }
+
+    bytei_begin() {
+        return this.i_begin * DECI_WORD_BYTES;
+    }
+
+    bytei_end() {
+        return this.i_end * DECI_WORD_BYTES;
+    }
+
+    empty() {
+        return this.i_end === this.i_begin;
+    }
+}
+
+const ACTION_add = (instance, memory_view, a, b) => {
+    if (a.size() < b.size()) {
+        [a, b] = [b, a];
+    }
+
+    const carry = instance.exports.deci_add(
+        a.bytei_begin(), a.bytei_end(),
+        b.bytei_begin(), b.bytei_end());
+
+    if (carry)
+        memory_view[a.i_end++] = 1;
+
+    return {result: a};
+};
+
+const ACTION_sub = (instance, memory_view, a, b) => {
+    let neg = false;
+    if (a.size() < b.size()) {
+        [a, b] = [b, a];
+        neg = true;
+    }
+
+    const underflow = instance.exports.deci_sub(
+        a.bytei_begin(), a.bytei_end(),
+        b.bytei_begin(), b.bytei_end());
+
+    if (underflow)
+        neg = !neg;
+
+    a.i_end = deci_normalize(memory_view, a.i_begin, a.i_end);
+
+    return {
+        negative: neg && !a.empty(),
+        result: a,
+    };
+};
+
+const parse_forward = (s, memory_view, state) => {
+    const i = state.i;
+    const j = deci_from_str(s, memory_view, i, Infinity);
+    if (j < 0)
+        throw new Error(`cannot parse: error code ${j}`);
+    state.i = j;
+    return new Span(i, j);
+};
+
+const stringify_span = (memory_view, a) => {
+    return deci_to_str(memory_view, a.i_begin, a.i_end);
+};
+
+async function init() {
+    const { instance } = await WebAssembly.instantiateStreaming(fetch("./deci.wasm"));
+
+    const memory = instance.exports.memory;
+
+    const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
+
+    const parse_state = {i: 0};
+    const a_span = parse_forward('123456', memory_view, parse_state);
+    const b_span = parse_forward('7890', memory_view, parse_state);
+
+    const { result } = ACTION_add(instance, memory_view, a_span, b_span);
+
+    console.log(stringify_span(memory_view, result));
+}
+init();
+
 </script>
