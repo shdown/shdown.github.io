@@ -104,7 +104,7 @@ const ACTION_add = (instance, memory_view, a, b) => {
     if (carry)
         memory_view[a.i_end++] = 1;
 
-    return {result: a};
+    return {span: a};
 };
 
 const ACTION_sub = (instance, memory_view, a, b) => {
@@ -125,7 +125,7 @@ const ACTION_sub = (instance, memory_view, a, b) => {
 
     return {
         negative: neg && !a.empty(),
-        result: a,
+        span: a,
     };
 };
 
@@ -146,7 +146,9 @@ const stringify_span = (memory_view, a) => {
 
 const install_global_error_handler = (root_div) => {
     window.onerror = (error_msg, url, line_num, column_num, error_obj) => {
-        root_div.prepend(`ERROR: ${error_msg} @ ${url}:${line_num}:${column_num}`);
+        const p = _from_html('<p class="error"></p>');
+        p.append(`Error: ${error_msg} @ ${url}:${line_num}:${column_num}`);
+        root_div.prepend(p);
         console.log('Error object:');
         console.log(error_obj);
         return false;
@@ -171,7 +173,8 @@ const async_main = async (root_div) => {
                     id="n1"
                     type="number"
                     required
-                    value="59405769675091834891050553361823294268346042660263">
+                    size="40"
+                    value="594646263237613110610833421412">
                 </input>
             </div>
             <div>
@@ -188,25 +191,56 @@ const async_main = async (root_div) => {
                     id="n2"
                     type="number"
                     required
-                    value="3805443826573967171090040429363839217988">
+                    size="40"
+                    value="70448332002320097361">
                 </input>
             </div>
             <div>
-                <input type="submit">=</input>
+                <input type="submit" value="=">
+                </input>
             </div>
             <div id="answer">
             </div>
         </form>
     `);
 
-    form.onsubmit = () => {
-        const s1 = document.getElementById('n1').value;
-        const act = document.getElementById('act').value;
-        const s2 = document.getElementById('n2').value;
+    const work = (s_n1, s_act, s_n2) => {
+        const parse_state = {i: 0, maxi: 65536};
+        const a_span = parse_forward(s_n1, memory_view, parse_state);
+        const b_span = parse_forward(s_n2, memory_view, parse_state);
 
-        console.log(s1);
-        console.log(act);
-        console.log(s2);
+        let result;
+        switch (s_act) {
+        case 'add':
+            result = ACTION_add(instance, memory_view, a_span, b_span);
+            break;
+        case 'sub':
+            result = ACTION_sub(instance, memory_view, a_span, b_span);
+            break;
+        default:
+            throw new Error('action not supported yet');
+        }
+
+        const abs_str = stringify_span(memory_view, result.span);
+        return (result.negative ? '-' : '') + abs_str;
+    };
+
+    form.onsubmit = () => {
+        const s_n1 = document.getElementById('n1').value;
+        const s_act = document.getElementById('act').value;
+        const s_n2 = document.getElementById('n2').value;
+
+        const answer = document.getElementById('answer');
+        answer.innerHTML = '';
+
+        try {
+            const s_result = work(s_n1, s_act, s_n2);
+            answer.append(s_result);
+        } catch (err) {
+            const p = _from_html('<p class="error"></p>');
+            p.append(`${err.name}: ${err.message}`);
+            answer.appendChild(p);
+        }
 
         return false;
     };
@@ -217,14 +251,6 @@ const async_main = async (root_div) => {
         This is a demo of
             <a href="https://github.com/shdown/libdeci">libdeci</a>,
         a big decimal library for C, compiled for WebAssembly.</p>`));
-
-    //const parse_state = {i: 0, maxi: 65536};
-    //const a_span = parse_forward('123456', memory_view, parse_state);
-    //const b_span = parse_forward('7890', memory_view, parse_state);
-
-    //const { result } = ACTION_add(instance, memory_view, a_span, b_span);
-
-    //root_div.append(stringify_span(memory_view, result));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
