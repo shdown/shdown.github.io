@@ -200,9 +200,9 @@ const async_main = async (root_div) => {
     `);
 
     form.onsubmit = () => {
-        const s1 = form.getElementById('n1').value;
-        const act = form.getElementById('act').value;
-        const s2 = form.getElementById('n2').value;
+        const s1 = document.getElementById('n1').value;
+        const act = document.getElementById('act').value;
+        const s2 = document.getElementById('n2').value;
 
         console.log(s1);
         console.log(act);
@@ -213,8 +213,10 @@ const async_main = async (root_div) => {
 
     root_div.innerHTML = '';
     root_div.appendChild(form);
-    root_div.appendChild(_from_html(
-        '<p>This is a demo of <b>libdeci</b> compiled for WebAssembly.</p>'));
+    root_div.appendChild(_from_html(`<p>
+        This is a demo of
+            <a href="https://github.com/shdown/libdeci">libdeci</a>,
+        a big decimal library for C, compiled for WebAssembly.</p>`));
 
     //const parse_state = {i: 0, maxi: 65536};
     //const a_span = parse_forward('123456', memory_view, parse_state);
