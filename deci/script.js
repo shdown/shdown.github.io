@@ -221,16 +221,56 @@ const _from_html = (html) => {
     return tmpl.content.firstChild;
 };
 
-const wasmInstantiateFromSource = async (source) => {
+class DownloadError extends Error {
+    constructor(xhr) {
+        super(`HTTP ${xhr.status} ${xhr.statusText}`);
+        this.name = 'DownloadError';
+    }
+}
+
+const downloadTheDumbWay = (src) => {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', src, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.response);
+            } else {
+                reject(new DownloadError(xhr));
+            }
+        };
+        xhr.onerror = () => {
+            reject(new DownloadError(xhr));
+        };
+        xhr.send(null);
+    });
+};
+
+const streamOrDownloadTheDumbWay = async (src) => {
+    try {
+        return fetch(src);
+    } catch (err) {
+        // We assume this is something like
+        //   'URL scheme must be "http" or "https" for CORS request.'
+        // for, e.g., 'file://' protocol.
+        return await downloadTheDumbWay(src);
+    }
+};
+
+const wasmInstantiateFrom = async (src) => {
     if (WebAssembly.instantiateStreaming !== undefined) {
-        return await WebAssembly.instantiateStreaming(source);
+        return await WebAssembly.instantiateStreaming(
+            await streamOrDownloadTheDumbWay(src));
     }
 
     let module;
     if (WebAssembly.compileStreaming !== undefined) {
-        module = await WebAssembly.compileStreaming(source);
+        module = await WebAssembly.compileStreaming(
+            await streamOrDownloadTheDumbWay(src));
     } else {
-        module = await WebAssembly.compile(source);
+        module = await WebAssembly.compile(
+            await downloadTheDumbWay(src));
     }
     return await WebAssembly.instantiate(module);
 };
