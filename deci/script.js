@@ -212,8 +212,9 @@ const async_main = async (root_div) => {
     };
 
     root_div.innerHTML = '';
-    console.log(form);
     root_div.appendChild(form);
+    root_div.appendChild(_from_html(
+        '<p>This is a demo of <b>libdeci</b> compiled for WebAssembly.</p>'));
 
     //const parse_state = {i: 0, maxi: 65536};
     //const a_span = parse_forward('123456', memory_view, parse_state);
