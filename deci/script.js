@@ -199,11 +199,16 @@ const ACTION_mod = (instance, memory_view, a, b, outi) => {
 
 //---------------------------------------------------------------------------------------
 
-const install_global_error_handler = (root_div) => {
+const report_error = (text) => {
+    const root_div = document.getElementById('root');
+    const p = _from_html('<p class="error"></p>');
+    p.append(text);
+    root_div.prepend(p);
+};
+
+const install_global_error_handler = () => {
     window.onerror = (error_msg, url, line_num, column_num, error_obj) => {
-        const p = _from_html('<p class="error"></p>');
-        p.append(`Error: ${error_msg} @ ${url}:${line_num}:${column_num}`);
-        root_div.prepend(p);
+        report_error(`Error: ${error_msg} @ ${url}:${line_num}:${column_num}`);
         console.log('Error object:');
         console.log(error_obj);
         return false;
@@ -216,9 +221,16 @@ const _from_html = (html) => {
     return tmpl.content.firstChild;
 };
 
-const async_main = async (root_div) => {
-    const { instance } = await WebAssembly.instantiateStreaming(
-        fetch("./deci.wasm"));
+const async_main = async () => {
+    const source = fetch("./deci.wasm");
+    let wasm;
+    //if (WebAssembly['instantiateStreaming'] !== undefined) {
+        wasm = await WebAssembly.instantiateStreaming(source);
+    //} else {
+    //    const module = await WebAssembly.compileStreaming(source);
+    //    wasm = await WebAssembly.instantiate(module);
+    //}
+    const instance = wasm.instance;
     const memory = instance.exports.memory;
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
 
@@ -290,14 +302,15 @@ const async_main = async (root_div) => {
             const s_result = work(s_n1, s_act, s_n2);
             answer.append(s_result);
         } catch (err) {
-            const p = _from_html('<p class="error"></p>');
-            p.append(`${err.name}: ${err.message}`);
-            answer.appendChild(p);
+            const span = _from_html('<span class="error"></span>');
+            span.append(`${err.name}: ${err.message}`);
+            answer.appendChild(span);
         }
 
         return false;
     };
 
+    const root_div = document.getElementById('root');
     root_div.innerHTML = '';
     root_div.appendChild(form);
     root_div.appendChild(_from_html(`<p>
@@ -307,10 +320,10 @@ const async_main = async (root_div) => {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const root_div = document.getElementById('root');
-    install_global_error_handler(root_div);
-    async_main(root_div)
+    install_global_error_handler();
+    async_main()
         .catch((err) => {
+            report_error(`Error: ${err.name}: ${err.message}`);
             throw err;
         });
 });
