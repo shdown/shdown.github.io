@@ -213,7 +213,7 @@ const async_main = async (root_div) => {
     };
 
     root_div.innerHTML = '';
-    root_div.append(form);
+    root_div.appendChild(form);
 
     //const parse_state = {i: 0, maxi: 65536};
     //const a_span = parse_forward('123456', memory_view, parse_state);
