@@ -247,37 +247,39 @@ const downloadTheDumbWay = (src) => {
     });
 };
 
-const streamOrDownloadTheDumbWay = async (src) => {
-    try {
-        return fetch(src);
-    } catch (err) {
-        // We assume this is something like
-        //   'URL scheme must be "http" or "https" for CORS request.'
-        // for, e.g., 'file://' protocol.
-        return await downloadTheDumbWay(src);
-    }
+const streamTheSmartWay = (src) => {
+    return fetch(src);
 };
 
-const wasmInstantiateFrom = async (src) => {
-    if (WebAssembly.instantiateStreaming !== undefined) {
-        return await WebAssembly.instantiateStreaming(
-            await streamOrDownloadTheDumbWay(src));
-    }
-
-    let module;
-    if (WebAssembly.compileStreaming !== undefined) {
-        module = await WebAssembly.compileStreaming(
-            await streamOrDownloadTheDumbWay(src));
-    } else {
-        module = await WebAssembly.compile(
-            await downloadTheDumbWay(src));
-    }
+const wasmInstantiateTheDumbWayFrom = async (src) => {
+    const blob = await downloadTheDumbWay(src);
+    const module = await WebAssembly.compile(blob);
     return await WebAssembly.instantiate(module);
 };
 
+const wasmInstantiateFrom = async (src) => {
+    const proto = window.location.protocol;
+    if (proto !== 'http:' && proto !== 'https:') {
+        return await wasmInstantiateTheDumbWayFrom(src);
+    }
+
+    if (WebAssembly.instantiateStreaming !== undefined) {
+        const stream = streamTheSmartWay(src);
+        return await WebAssembly.instantiateStreaming(stream);
+    }
+
+    if (WebAssembly.compileStreaming !== undefined) {
+        const stream = streamTheSmartWay(src);
+        const module = await WebAssembly.compileStreaming(stream);
+        return await WebAssembly.instantiate(module);
+    }
+
+    return await wasmInstantiateTheDumbWayFrom(src);
+};
+
 const async_main = async () => {
-    const source = fetch("./deci.wasm");
-    const { instance } = await wasmInstantiateFromSource(source);
+    const wasm = await wasmInstantiateFrom("./deci.wasm");
+    const instance = (wasm.instance !== undefined) ? wasm.instance : wasm;
 
     const memory = instance.exports.memory;
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
@@ -286,7 +288,6 @@ const async_main = async () => {
             <div>
                 <input
                     id="n1"
-                    type="number"
                     required
                     size="40"
                     value="594646263237613110610">
@@ -304,7 +305,6 @@ const async_main = async () => {
             <div>
                 <input
                     id="n2"
-                    type="number"
                     required
                     size="40"
                     value="70448332002320097361">
