@@ -2,18 +2,10 @@
 
 <script type="module">
     async function init() {
-        const memory = new WebAssembly.Memory({
-            initial: 10,
-            maximum: 100,
-        });
+        const { instance } = await WebAssembly.instantiateStreaming(fetch("./deci.wasm"));
 
-        const { instance } = await WebAssembly.instantiateStreaming(
-            fetch("./deci.wasm"),
-            {
-                js: {
-                    mem: memory,
-                },
-            });
+        const memory = instance.exports.memory;
+        console.log(memory);
 
         const view = new Uint16Array(memory.buffer);
         view[0] = 9283;
