@@ -90,6 +90,10 @@ class Span {
     empty() {
         return this.i_end === this.i_begin;
     }
+
+    resize(n) {
+        this.i_end = this.i_begin + n;
+    }
 }
 
 const parse_forward_span = (s, memory_view, state) => {
@@ -169,10 +173,11 @@ const ACTION_div = (instance, memory_view, a, b, outi) => {
     if (b.empty())
         throw new Error('division by zero');
 
-    a.size = instance.exports.deci_div(
+    const nr = instance.exports.deci_div(
         a.bytei_begin(), a.bytei_end(),
         b.bytei_begin(), b.bytei_end());
 
+    a.resize(nr);
     normalize_span(memory_view, a);
 
     return {span: a};
@@ -182,10 +187,11 @@ const ACTION_mod = (instance, memory_view, a, b, outi) => {
     if (b.empty())
         throw new Error('division by zero');
 
-    a.size = instance.exports.deci_mod(
+    const nr = instance.exports.deci_mod(
         a.bytei_begin(), a.bytei_end(),
         b.bytei_begin(), b.bytei_end());
 
+    a.resize(nr);
     normalize_span(memory_view, a);
 
     return {span: a};
