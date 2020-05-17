@@ -1,7 +1,3 @@
-<!DOCTYPE html>
-
-<script type="module">
-
 const DECI_BASE_LOG = 4;
 const DECI_BASE = 10000;
 const DECI_WORD_BYTES = 2;
@@ -9,19 +5,27 @@ const DECI_UINTXX_ARRAY_CLASS = Uint16Array;
 
 const _div_ceil = (a, b) => Math.ceil(a / b);
 
-const EFORMAT = -1;
-const ETOOBIG = -2;
+const DECI_EFORMAT = -1;
+const DECI_ETOOBIG = -2;
+
+const deci_strerror = (errno) => {
+    switch (errno) {
+    case DECI_EFORMAT: return "invalid number format";
+    case DECI_ETOOBIG: return "number is too big";
+    default: return null;
+    }
+};
 
 const deci_from_str = (s, memory_view, i, out_max) => {
     const m = s.match(/^0*([0-9]*)$/);
     if (m === null)
-        return EFORMAT;
+        return DECI_EFORMAT;
     s = m[1];
 
     const ns = s.length;
     const nout = _div_ceil(ns, DECI_BASE_LOG);
     if (nout > out_max)
-        return ETOOBIG;
+        return DECI_ETOOBIG;
 
     let si = ns;
     for (;;) {
@@ -57,6 +61,13 @@ const deci_normalize = (memory_view, i_begin, i_end) => {
         --i_end;
     return i_end;
 };
+
+const deci_zero_out = (memory_view, i_begin, i_end) => {
+    for (let i = i_begin; i !== i_end; ++i)
+        memory_view[i] = 0;
+};
+
+//---------------------------------------------------------------------------------------
 
 class Span {
     constructor(i_begin, i_end) {
@@ -120,9 +131,9 @@ const ACTION_sub = (instance, memory_view, a, b) => {
 
 const parse_forward = (s, memory_view, state) => {
     const i = state.i;
-    const j = deci_from_str(s, memory_view, i, Infinity);
+    const j = deci_from_str(s, memory_view, i, state.maxi - i);
     if (j < 0)
-        throw new Error(`cannot parse: error code ${j}`);
+        throw new Error(deci_strerror(j));
     state.i = j;
     return new Span(i, j);
 };
@@ -131,21 +142,38 @@ const stringify_span = (memory_view, a) => {
     return deci_to_str(memory_view, a.i_begin, a.i_end);
 };
 
-async function init() {
+//---------------------------------------------------------------------------------------
+
+const install_global_error_handler = (root_div) => {
+    window.onerror = (error_msg, url, line_num, column_num, error_obj) => {
+        root_div.prepend(`ERROR: ${error_msg} @ ${url}:${line_num}:${column_num}`);
+        console.log('Error object:');
+        console.log(error_obj);
+        return false;
+    };
+};
+
+const async_main = async (root_div) => {
+    root_div.innerHTML = '≈≈» ';
+
     const { instance } = await WebAssembly.instantiateStreaming(fetch("./deci.wasm"));
-
     const memory = instance.exports.memory;
-
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
 
-    const parse_state = {i: 0};
+    const parse_state = {i: 0, maxi: 65536};
     const a_span = parse_forward('123456', memory_view, parse_state);
     const b_span = parse_forward('7890', memory_view, parse_state);
 
     const { result } = ACTION_add(instance, memory_view, a_span, b_span);
 
-    console.log(stringify_span(memory_view, result));
+    root_div.append(stringify_span(memory_view, result));
 }
-init();
 
-</script>
+document.addEventListener('DOMContentLoaded', () => {
+    const root_div = document.getElementById('root');
+    install_global_error_handler(root_div);
+    async_main(root_div)
+        .catch((err) => {
+            throw err;
+        });
+});
