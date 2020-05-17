@@ -232,7 +232,8 @@ const wasmInstantiateFromSource = async (source) => {
 
 const async_main = async () => {
     const source = fetch("./deci.wasm");
-    const { instance } = wasmInstantiateFromSource(source);
+    const { instance } = await wasmInstantiateFromSource(source);
+
     const memory = instance.exports.memory;
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
 
