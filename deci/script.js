@@ -221,16 +221,18 @@ const _from_html = (html) => {
     return tmpl.content.firstChild;
 };
 
+const wasmInstantiateFromSource = async (source) => {
+    if (WebAssembly.instantiateStreaming !== undefined) {
+        return await WebAssembly.instantiateStreaming(source);
+    } else {
+        const module = await WebAssembly.compileStreaming(source);
+        return await WebAssembly.instantiate(module);
+    }
+};
+
 const async_main = async () => {
     const source = fetch("./deci.wasm");
-    let wasm;
-    //if (WebAssembly['instantiateStreaming'] !== undefined) {
-        wasm = await WebAssembly.instantiateStreaming(source);
-    //} else {
-    //    const module = await WebAssembly.compileStreaming(source);
-    //    wasm = await WebAssembly.instantiate(module);
-    //}
-    const instance = wasm.instance;
+    const { instance } = wasmInstantiateFromSource(source);
     const memory = instance.exports.memory;
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
 
