@@ -165,8 +165,7 @@ const async_main = async (root_div) => {
     const memory = instance.exports.memory;
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
 
-    const form = _from_html(`
-        <form>
+    const form = _from_html(`<form>
             <div>
                 <input
                     id="n1"
