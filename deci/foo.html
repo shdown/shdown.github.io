@@ -1,29 +1,30 @@
 <!DOCTYPE html>
 
 <script type="module">
-    const SPAN = (wordsArray) => {
-        const buffer = wordsArray.buffer;
-        return [buffer, buffer.slice(buffer.byteLength)];
-    };
     async function init() {
+        const memory = new WebAssembly.Memory({
+            initial: 10,
+            maximum: 100,
+        });
+
         const { instance } = await WebAssembly.instantiateStreaming(
-            fetch("./deci.wasm")
-        );
+            fetch("./deci.wasm"),
+            {
+                js: {
+                    mem: memory,
+                },
+            });
 
-        const a = new Uint16Array(1);
-        a[0] = 15;
+        const view = new Uint16Array(memory.buffer);
+        view[0] = 9283;
+        view[1] = 3061;
 
-        const b = new Uint16Array(1);
-        b[0] = 93;
-
-        const [a_BEGIN, a_END] = SPAN(a);
-        const [b_BEGIN, b_END] = SPAN(b);
         const carry = instance.exports.deci_add(
-            a_BEGIN, a_END,
-            b_BEGIN, b_END);
+            0, 1,
+            1, 2);
 
         console.log(carry);
-        console.log(a);
+        console.log(view[0]);
     }
     init();
 </script>
