@@ -213,6 +213,7 @@ const async_main = async (root_div) => {
     };
 
     root_div.innerHTML = '';
+    console.log(form);
     root_div.appendChild(form);
 
     //const parse_state = {i: 0, maxi: 65536};
