@@ -153,20 +153,75 @@ const install_global_error_handler = (root_div) => {
     };
 };
 
-const async_main = async (root_div) => {
-    root_div.innerHTML = '≈≈» ';
+const _from_html = (html) => {
+    const tmpl = document.createElement('template');
+    tmpl.innerHTML = html;
+    return tmpl.content.firstChild;
+};
 
-    const { instance } = await WebAssembly.instantiateStreaming(fetch("./deci.wasm"));
+const async_main = async (root_div) => {
+    const { instance } = await WebAssembly.instantiateStreaming(
+        fetch("./deci.wasm"));
     const memory = instance.exports.memory;
     const memory_view = new DECI_UINTXX_ARRAY_CLASS(memory.buffer);
 
-    const parse_state = {i: 0, maxi: 65536};
-    const a_span = parse_forward('123456', memory_view, parse_state);
-    const b_span = parse_forward('7890', memory_view, parse_state);
+    const form = _from_html(`
+        <form>
+            <div>
+                <input
+                    id="n1"
+                    type="number"
+                    required
+                    value="59405769675091834891050553361823294268346042660263">
+                </input>
+            </div>
+            <div>
+                <select id="act" required>
+                    <option value="add" selected>+</option>
+                    <option value="sub">-</option>
+                    <option value="mul">*</option>
+                    <option value="div">/</option>
+                    <option value="mod">%</option>
+                </select>
+            </div>
+            <div>
+                <input
+                    id="n2"
+                    type="number"
+                    required
+                    value="3805443826573967171090040429363839217988">
+                </input>
+            </div>
+            <div>
+                <input type="submit">=</input>
+            </div>
+            <div id="answer">
+            </div>
+        </form>
+    `);
 
-    const { result } = ACTION_add(instance, memory_view, a_span, b_span);
+    form.onsubmit = () => {
+        const s1 = form.getElementById('n1').value;
+        const act = form.getElementById('act').value;
+        const s2 = form.getElementById('n2').value;
 
-    root_div.append(stringify_span(memory_view, result));
+        console.log(s1);
+        console.log(act);
+        console.log(s2);
+
+        return false;
+    };
+
+    root_div.innerHTML = '';
+    root_div.append(form);
+
+    //const parse_state = {i: 0, maxi: 65536};
+    //const a_span = parse_forward('123456', memory_view, parse_state);
+    //const b_span = parse_forward('7890', memory_view, parse_state);
+
+    //const { result } = ACTION_add(instance, memory_view, a_span, b_span);
+
+    //root_div.append(stringify_span(memory_view, result));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
