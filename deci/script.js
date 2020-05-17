@@ -92,6 +92,27 @@ class Span {
     }
 }
 
+const parse_forward_span = (s, memory_view, state) => {
+    const i = state.i;
+    const j = deci_from_str(s, memory_view, i, state.maxi - i);
+    if (j < 0)
+        throw new Error(deci_strerror(j));
+    state.i = j;
+    return new Span(i, j);
+};
+
+const stringify_span = (memory_view, a) => {
+    return deci_to_str(memory_view, a.i_begin, a.i_end);
+};
+
+const zero_out_span = (memory_view, a) => {
+    deci_zero_out(memory_view, a.i_begin, a.i_end);
+};
+
+const normalize_span = (memory_view, a) => {
+    a.i_end = deci_normalize(memory_view, a.i_begin, a.i_end);
+};
+
 const ACTION_add = (instance, memory_view, a, b) => {
     if (a.size() < b.size()) {
         [a, b] = [b, a];
@@ -114,14 +135,14 @@ const ACTION_sub = (instance, memory_view, a, b) => {
         neg = true;
     }
 
-    const underflow = instance.exports.deci_sub(
+    const underflow = instance.exports.WRAPPED_deci_sub(
         a.bytei_begin(), a.bytei_end(),
         b.bytei_begin(), b.bytei_end());
 
     if (underflow)
         neg = !neg;
 
-    a.i_end = deci_normalize(memory_view, a.i_begin, a.i_end);
+    normalize_span(memory_view, a);
 
     return {
         negative: neg && !a.empty(),
@@ -129,17 +150,45 @@ const ACTION_sub = (instance, memory_view, a, b) => {
     };
 };
 
-const parse_forward = (s, memory_view, state) => {
-    const i = state.i;
-    const j = deci_from_str(s, memory_view, i, state.maxi - i);
-    if (j < 0)
-        throw new Error(deci_strerror(j));
-    state.i = j;
-    return new Span(i, j);
+const ACTION_mul = (instance, memory_view, a, b, outi) => {
+    const r = new Span(outi, outi + a.size() + b.size());
+
+    zero_out_span(memory_view, r);
+
+    instance.exports.deci_mul(
+        a.bytei_begin(), a.bytei_end(),
+        b.bytei_begin(), b.bytei_end(),
+        r.bytei_begin());
+
+    normalize_span(memory_view, r);
+
+    return {span: r};
 };
 
-const stringify_span = (memory_view, a) => {
-    return deci_to_str(memory_view, a.i_begin, a.i_end);
+const ACTION_div = (instance, memory_view, a, b, outi) => {
+    if (b.empty())
+        throw new Error('division by zero');
+
+    a.size = instance.exports.deci_div(
+        a.bytei_begin(), a.bytei_end(),
+        b.bytei_begin(), b.bytei_end());
+
+    normalize_span(memory_view, a);
+
+    return {span: a};
+};
+
+const ACTION_mod = (instance, memory_view, a, b, outi) => {
+    if (b.empty())
+        throw new Error('division by zero');
+
+    a.size = instance.exports.deci_mod(
+        a.bytei_begin(), a.bytei_end(),
+        b.bytei_begin(), b.bytei_end());
+
+    normalize_span(memory_view, a);
+
+    return {span: a};
 };
 
 //---------------------------------------------------------------------------------------
@@ -174,7 +223,7 @@ const async_main = async (root_div) => {
                     type="number"
                     required
                     size="40"
-                    value="594646263237613110610833421412">
+                    value="594646263237613110610">
                 </input>
             </div>
             <div>
@@ -206,19 +255,17 @@ const async_main = async (root_div) => {
 
     const work = (s_n1, s_act, s_n2) => {
         const parse_state = {i: 0, maxi: 65536};
-        const a_span = parse_forward(s_n1, memory_view, parse_state);
-        const b_span = parse_forward(s_n2, memory_view, parse_state);
+        const a_span = parse_forward_span(s_n1, memory_view, parse_state);
+        const b_span = parse_forward_span(s_n2, memory_view, parse_state);
 
         let result;
         switch (s_act) {
-        case 'add':
-            result = ACTION_add(instance, memory_view, a_span, b_span);
-            break;
-        case 'sub':
-            result = ACTION_sub(instance, memory_view, a_span, b_span);
-            break;
-        default:
-            throw new Error('action not supported yet');
+        case 'add': result = ACTION_add(instance, memory_view, a_span, b_span); break;
+        case 'sub': result = ACTION_sub(instance, memory_view, a_span, b_span); break;
+        case 'mul': result = ACTION_mul(instance, memory_view, a_span, b_span, parse_state.i); break;
+        case 'div': result = ACTION_div(instance, memory_view, a_span, b_span); break;
+        case 'mod': result = ACTION_mod(instance, memory_view, a_span, b_span); break;
+        default: throw new Error(`unknown action: ${s_act}`);
         }
 
         const abs_str = stringify_span(memory_view, result.span);
