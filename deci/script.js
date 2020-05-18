@@ -320,8 +320,6 @@ const asyncMain = async () => {
     `);
 
     const compute = (s1, action, s2) => {
-        console.log('s1=' + s1);
-        console.log('s2=' + s2);
         const parseState = {cur: 0, max: 65536};
         const a = spanParseForward(s1, memoryView, parseState);
         const b = spanParseForward(s2, memoryView, parseState);
