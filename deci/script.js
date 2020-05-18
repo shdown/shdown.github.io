@@ -98,10 +98,12 @@ class Span {
 }
 
 const spanParseForward = (s, memoryView, parseState) => {
+    console.log(`s=${s}`);
     const begin = parseState.cur;
     const end = deci_from_str(s, memoryView, begin, parseState.max);
     if (end < 0)
         throw new Error(deci_strerror(end));
+    console.log(`begin=${begin}, end=${end}`);
     parseState.cur = end;
     return new Span(begin, end);
 };
@@ -320,6 +322,8 @@ const asyncMain = async () => {
     `);
 
     const compute = (s1, action, s2) => {
+        console.log('s1=' + s1);
+        console.log('s2=' + s2);
         const parseState = {cur: 0, max: 65536};
         const a = spanParseForward(s1, memoryView, parseState);
         const b = spanParseForward(s2, memoryView, parseState);
