@@ -72,7 +72,7 @@ const deci_zero_out = (memory_view, begin, end) => {
 
 class Span {
     constructor(begin, end) {
-        this.begin = end;
+        this.begin = begin;
         this.end = end;
     }
 
@@ -98,12 +98,10 @@ class Span {
 }
 
 const spanParseForward = (s, memoryView, parseState) => {
-    console.log(`s=${s}`);
     const begin = parseState.cur;
     const end = deci_from_str(s, memoryView, begin, parseState.max);
     if (end < 0)
         throw new Error(deci_strerror(end));
-    console.log(`begin=${begin}, end=${end}`);
     parseState.cur = end;
     return new Span(begin, end);
 };
