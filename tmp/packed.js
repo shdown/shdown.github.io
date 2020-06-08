@@ -1451,7 +1451,7 @@ const installGlobalErrorHandler = () => {
 
 document.addEventListener('DOMContentLoaded', () => {
   installGlobalErrorHandler();
-  new _vk_transport_connect.VkRequest('VKWebAppInit', {}).schedule();
+  (0, _vk_transport_connect.vkSendInitRequest)();
   asyncMain().catch(err => {
     reportError(`Error: ${err.name}: ${err.message}`);
     throw err;
@@ -1552,7 +1552,7 @@ class LoadingView extends _view.View {
 exports.LoadingView = LoadingView;
 
 },{"./gettext.js":8,"./view.js":24}],13:[function(require,module,exports){
-!function(e,n){"object"==typeof exports&&"undefined"!=typeof module?n(exports):"function"==typeof define&&define.amd?define(["exports"],n):n((e=e||self).vkConnect={})}(this,function(e){"use strict";var u=function(){return(u=Object.assign||function(e){for(var n,t=1,o=arguments.length;t<o;t++)for(var r in n=arguments[t])Object.prototype.hasOwnProperty.call(n,r)&&(e[r]=n[r]);return e}).apply(this,arguments)};function d(){for(var e=0,n=0,t=arguments.length;n<t;n++)e+=arguments[n].length;var o=Array(e),r=0;for(n=0;n<t;n++)for(var i=arguments[n],p=0,u=i.length;p<u;p++,r++)o[r]=i[p];return o}function o(i,e){var t,r,p=(t={current:0,next:function(){return++this.current}},r={},{add:function(e){var n=t.next();return r[n]=e,n},resolve:function(e,n,t){var o=r[e];o&&(t(n)?o.resolve(n):o.reject(n),r[e]=null)}});return e(function(e){if(e.detail&&e.detail.data){var n=e.detail.data,t=n.request_id,o=function(e,n){var t={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&n.indexOf(o)<0&&(t[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)n.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(t[o[r]]=e[o[r]])}return t}(n,["request_id"]);t&&p.resolve(t,o,function(e){return!("error_type"in e)})}}),function(o,r){return void 0===r&&(r={}),new Promise(function(e,n){var t=null==r.request_id?p.add({resolve:e,reject:n}):r.request_id;i(o,u(u({},r),{request_id:t}))})}}var n="undefined"!=typeof window,a=Boolean(n&&window.AndroidBridge),s=Boolean(n&&window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.VKWebAppClose),f=!a&&!s,r=f?"message":"VKWebAppEvent",l=["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppResizeWindow","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites","VKWebAppShowCommunityWidgetPreviewBox"],c=n?window.AndroidBridge:void 0,b=s?window.webkit.messageHandlers:void 0;function t(){for(var o=[],e=0;e<arguments.length;e++)o[e]=arguments[e];return o.includes(void 0)||o.includes(null)?t.apply(void 0,o.filter(function(e){return"function"==typeof e})):function(t){if(0===o.length)return t;var e,n={subscribe:t.subscribe,send:function(){for(var e=[],n=0;n<arguments.length;n++)e[n]=arguments[n];return t.send.apply(t,e)}};return e=o.filter(function(e){return"function"==typeof e}).map(function(e){return e(n)}).reduce(function(n,t){return function(e){return n(t(e))}})(t.send),u(u({},t),{send:e})}}function i(e,n){var t=n||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!t.bubbles,!!t.cancelable,t.detail),o}"undefined"==typeof window||window.CustomEvent||(window.CustomEvent=(i.prototype=Event.prototype,i));var p=function(t){var i=void 0,p=[];function e(e){p.push(e)}"undefined"!=typeof window&&"addEventListener"in window&&window.addEventListener(r,function(n){if(s||a)return d(p).map(function(e){return e.call(null,n)});if(f&&n&&n.data){var e=n.data,t=e.type,o=e.data,r=e.frameId;t&&"VKWebAppSettings"===t?i=r:d(p).map(function(e){return e({detail:{type:t,data:o}})})}});var n=o(function(e,n){c&&c[e]?c[e](JSON.stringify(n)):b&&b[e]&&"function"==typeof b[e].postMessage?b[e].postMessage(n):f&&parent.postMessage({handler:e,params:n,type:"vk-connect",webFrameId:i,connectVersion:t},"*")},e);return{send:n,sendPromise:n,subscribe:e,unsubscribe:function(e){var n=p.indexOf(e);-1<n&&p.splice(n,1)},supports:function(e){return a?!(!c||"function"!=typeof c[e]):s?!(!b||!b[e]||"function"!=typeof b[e].postMessage):f&&-1<l.indexOf(e)},isWebView:function(){return s||a}}}("1.9.1");"undefined"!=typeof module&&module.exports&&(module.exports=u({},p),module.exports.default=u({},p),module.exports.applyMiddleware=t),e.applyMiddleware=t,e.default=p,Object.defineProperty(e,"__esModule",{value:!0})});
+!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?t(exports):"function"==typeof define&&define.amd?define(["exports"],t):t((e=e||self).vkBridge={})}(this,function(e){"use strict";var a=function(){return(a=Object.assign||function(e){for(var t,n=1,o=arguments.length;n<o;n++)for(var r in t=arguments[n])Object.prototype.hasOwnProperty.call(t,r)&&(e[r]=t[r]);return e}).apply(this,arguments)};function u(){for(var e=0,t=0,n=arguments.length;t<n;t++)e+=arguments[t].length;var o=Array(e),r=0;for(t=0;t<n;t++)for(var i=arguments[t],p=0,a=i.length;p<a;p++,r++)o[r]=i[p];return o}function o(i,e){var o,r,p=(o={current:0,next:function(){return++this.current}},r={},{add:function(e,t){var n=null!=t?t:o.next();return r[n]=e,n},resolve:function(e,t,n){var o=r[e];o&&(n(t)?o.resolve(t):o.reject(t),r[e]=null)}});return e(function(e){if(e.detail&&e.detail.data&&"request_id"in e.detail.data){var t=e.detail.data,n=t.request_id,o=function(e,t){var n={};for(var o in e)Object.prototype.hasOwnProperty.call(e,o)&&t.indexOf(o)<0&&(n[o]=e[o]);if(null!=e&&"function"==typeof Object.getOwnPropertySymbols){var r=0;for(o=Object.getOwnPropertySymbols(e);r<o.length;r++)t.indexOf(o[r])<0&&Object.prototype.propertyIsEnumerable.call(e,o[r])&&(n[o[r]]=e[o[r]])}return n}(t,["request_id"]);n&&p.resolve(n,o,function(e){return!("error_type"in e)})}}),function(o,r){return void 0===r&&(r={}),new Promise(function(e,t){var n=p.add({resolve:e,reject:t},r.request_id);i(o,a(a({},r),{request_id:n}))})}}var t="undefined"!=typeof window,d=Boolean(t&&window.AndroidBridge),s=Boolean(t&&window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.VKWebAppClose),f=t&&!d&&!s,n=f&&/(^\?|&)vk_platform=mobile_web(&|$)/.test(location.search),r=f?"message":"VKWebAppEvent",l=u(["VKWebAppInit","VKWebAppGetCommunityAuthToken","VKWebAppAddToCommunity","VKWebAppGetUserInfo","VKWebAppSetLocation","VKWebAppGetClientVersion","VKWebAppGetPhoneNumber","VKWebAppGetEmail","VKWebAppGetGeodata","VKWebAppSetTitle","VKWebAppGetAuthToken","VKWebAppCallAPIMethod","VKWebAppJoinGroup","VKWebAppLeaveGroup","VKWebAppAllowMessagesFromGroup","VKWebAppDenyNotifications","VKWebAppAllowNotifications","VKWebAppOpenPayForm","VKWebAppOpenApp","VKWebAppShare","VKWebAppShowWallPostBox","VKWebAppScroll","VKWebAppShowOrderBox","VKWebAppShowLeaderBoardBox","VKWebAppShowInviteBox","VKWebAppShowRequestBox","VKWebAppAddToFavorites","VKWebAppShowCommunityWidgetPreviewBox","VKWebAppShowStoryBox","VKWebAppStorageGet","VKWebAppStorageGetKeys","VKWebAppStorageSet"],f&&!n?["VKWebAppResizeWindow","VKWebAppAddToMenu"]:[]),c=t?window.AndroidBridge:void 0,b=s?window.webkit.messageHandlers:void 0;function i(e,t){var n=t||{bubbles:!1,cancelable:!1,detail:void 0},o=document.createEvent("CustomEvent");return o.initCustomEvent(e,!!n.bubbles,!!n.cancelable,n.detail),o}"undefined"==typeof window||window.CustomEvent||(window.CustomEvent=(i.prototype=Event.prototype,i));var p=function(n){var i=void 0,p=[];function e(e){p.push(e)}"undefined"!=typeof window&&"addEventListener"in window&&window.addEventListener(r,function(t){if(s||d)return u(p).map(function(e){return e.call(null,t)});if(f&&t&&t.data){var e=t.data,n=e.type,o=e.data,r=e.frameId;n&&"VKWebAppSettings"===n?i=r:u(p).map(function(e){return e({detail:{type:n,data:o}})})}});var t=o(function(e,t){c&&c[e]?c[e](JSON.stringify(t)):b&&b[e]&&"function"==typeof b[e].postMessage?b[e].postMessage(t):f&&parent.postMessage({handler:e,params:t,type:"vk-connect",webFrameId:i,connectVersion:n},"*")},e);return{send:t,sendPromise:t,subscribe:e,unsubscribe:function(e){var t=p.indexOf(e);-1<t&&p.splice(t,1)},supports:function(e){return d?!(!c||"function"!=typeof c[e]):s?!(!b||!b[e]||"function"!=typeof b[e].postMessage):f&&-1<l.indexOf(e)},isWebView:function(){return s||d}}}("2.2.2");e.applyMiddleware=function e(){for(var o=[],t=0;t<arguments.length;t++)o[t]=arguments[t];return o.includes(void 0)||o.includes(null)?e.apply(void 0,o.filter(function(e){return"function"==typeof e})):function(n){if(0===o.length)return n;var e,t={subscribe:n.subscribe,send:function(){for(var e=[],t=0;t<arguments.length;t++)e[t]=arguments[t];return n.send.apply(n,e)}};return e=o.filter(function(e){return"function"==typeof e}).map(function(e){return e(t)}).reduce(function(t,n){return function(e){return t(n(e))}})(n.send),a(a({},n),{send:e})}},e.default=p,Object.defineProperty(e,"__esModule",{value:!0})});
 
 },{}],14:[function(require,module,exports){
 "use strict";
@@ -22876,70 +22876,13 @@ exports.VkApiSession = VkApiSession;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Transport = exports.vkSendRequest = exports.VkRequestError = exports.VkRequest = void 0;
+exports.Transport = exports.vkSendRequest = exports.vkSendInitRequest = void 0;
 
-var _vkConnect = _interopRequireDefault(require("@vkontakte/vk-connect"));
+var _vkBridge = _interopRequireDefault(require("@vkontakte/vk-bridge"));
 
 var _vk_api = require("./vk_api.js");
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-const methodsByKey = {};
-const requestsByMethod = {};
-
-const doSend = request => {
-  for (const key in request.callbacks) methodsByKey[key] = request.method;
-
-  requestsByMethod[request.method] = request;
-
-  _vkConnect.default.send(request.method, request.params);
-};
-
-_vkConnect.default.subscribe(event => {
-  const {
-    type,
-    data
-  } = event.detail;
-  const method = methodsByKey[type];
-  const request = requestsByMethod[method]; // This also catches the 'method === undefined' case:
-
-  if (request === undefined) {
-    // "VKWebAppUpdateConfig"
-    // "VKWebAppInitResult"
-    console.log(`W: no handler for VK event of type "${type}"`);
-    return;
-  }
-
-  if (request.next !== null) doSend(request.next);else delete requestsByMethod[method];
-  request.callbacks[type](data);
-});
-
-class VkRequest {
-  constructor(method, params) {
-    this.method = method;
-    this.params = params;
-    this.callbacks = {};
-    this.next = null;
-  }
-
-  on(key, fn) {
-    this.callbacks[key] = fn;
-  }
-
-  schedule() {
-    const ongoing = requestsByMethod[this.method];
-
-    if (ongoing !== undefined) {
-      this.next = ongoing.next;
-      ongoing.next = this;
-    } else {
-      doSend(this);
-    }
-  }
-
-}
-
-exports.VkRequest = VkRequest;
 
 class VkRequestError extends Error {
   constructor(data) {
@@ -22950,14 +22893,18 @@ class VkRequestError extends Error {
 
 }
 
-exports.VkRequestError = VkRequestError;
+const vkSendInitRequest = () => {
+  _vkBridge.default.send('VKWebAppInit', {});
+};
+
+exports.vkSendInitRequest = vkSendInitRequest;
 
 const vkSendRequest = (method, successKey, failureKey, params) => {
+  const p = _vkBridge.default.send(method, params);
+
   return new Promise((resolve, reject) => {
-    const r = new VkRequest(method, params);
-    r.on(successKey, resolve);
-    r.on(failureKey, data => reject(new VkRequestError(data)));
-    r.schedule();
+    p.then(resolve);
+    p.catch(data => reject(new VkRequestError(data)));
   });
 };
 
@@ -22981,8 +22928,7 @@ class Transport {
         method: method,
         params: { ...params,
           access_token: this._accessToken
-        },
-        request_id: '1'
+        }
       });
     } catch (err) {
       if (!(err instanceof VkRequestError)) throw err;
@@ -23003,7 +22949,7 @@ class Transport {
 
 exports.Transport = Transport;
 
-},{"./vk_api.js":26,"@vkontakte/vk-connect":13}],28:[function(require,module,exports){
+},{"./vk_api.js":26,"@vkontakte/vk-bridge":13}],28:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
