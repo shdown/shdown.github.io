@@ -928,6 +928,16 @@ class FormView extends _view.View {
           return false;
         }
       });
+      this._reloadBtn = createButton({
+        container: fieldSet,
+        value: (0, _gettext.__)('Reload'),
+        kind: 'reload',
+        onclick: () => {
+          super._emitSignal('reload');
+
+          return false;
+        }
+      });
 
       this._form.appendChild(fieldSet);
     }
@@ -1422,6 +1432,9 @@ const asyncMain = async () => {
       /*tone=*/
       'error');
     });
+  });
+  formView.subscribe('reload', () => {
+    window.location.reload();
   });
   archiveView.subscribe('back', () => {
     viewManager.show(formView);
