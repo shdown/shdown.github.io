@@ -27,7 +27,7 @@ class AccessTokenError extends Error {
 exports.AccessTokenError = AccessTokenError;
 
 const requestAccessToken = async scope => {
-  const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', 'VKWebAppAccessTokenReceived', 'VKWebAppAccessTokenFailed', {
+  const result = await (0, _vk_transport_connect.vkSendRequest)('VKWebAppGetAuthToken', {
     app_id: _global_config.GLOBAL_CONFIG.APP_ID,
     scope: scope
   });
@@ -22899,7 +22899,7 @@ const vkSendInitRequest = () => {
 
 exports.vkSendInitRequest = vkSendInitRequest;
 
-const vkSendRequest = (method, successKey, failureKey, params) => {
+const vkSendRequest = (method, params) => {
   return new Promise((resolve, reject) => {
     _vkBridge.default.send(method, params).then(resolve).catch(data => reject(new VkRequestError(data)));
   });
@@ -22921,7 +22921,7 @@ class Transport {
     let result;
 
     try {
-      result = await vkSendRequest('VKWebAppCallAPIMethod', 'VKWebAppCallAPIMethodResult', 'VKWebAppCallAPIMethodFailed', {
+      result = await vkSendRequest('VKWebAppCallAPIMethod', {
         method: method,
         params: { ...params,
           access_token: this._accessToken
