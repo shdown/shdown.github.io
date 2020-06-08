@@ -22900,11 +22900,8 @@ const vkSendInitRequest = () => {
 exports.vkSendInitRequest = vkSendInitRequest;
 
 const vkSendRequest = (method, successKey, failureKey, params) => {
-  const p = _vkBridge.default.send(method, params);
-
   return new Promise((resolve, reject) => {
-    p.then(resolve);
-    p.catch(data => reject(new VkRequestError(data)));
+    _vkBridge.default.send(method, params).then(resolve).catch(data => reject(new VkRequestError(data)));
   });
 };
 
