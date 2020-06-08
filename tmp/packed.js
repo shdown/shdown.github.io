@@ -1054,7 +1054,8 @@ const trnRu = {
   'Searching in {0}/{1}…': 'Ищу в {0}/{1}…',
   'Time limit, days:': 'Ограничение по времени, в днях:',
   'User:': 'Пользователь:',
-  'We are being too fast ({0})': 'Умерим пыл ({0})'
+  'We are being too fast ({0})': 'Умерим пыл ({0})',
+  'Reload': 'Перезапуск'
 };
 const translations = {
   ru: trnRu,
