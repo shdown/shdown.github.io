@@ -1440,7 +1440,7 @@ const asyncMain = async () => {
     });
   });
   formView.subscribe('reload', () => {
-    window.location.reload();
+    doReloadPage();
   });
   archiveView.subscribe('back', () => {
     viewManager.show(formView);
@@ -1456,7 +1456,18 @@ const asyncMain = async () => {
 
 const reportError = text => {
   const rootDiv = document.getElementById('root');
-  rootDiv.prepend((0, _utils.fromHtml)(`<div class="error">${(0, _utils.htmlEscape)(text)}</div>`));
+  const reloadButton = (0, _utils.fromHtml)('<button></button>');
+  reloadButton.append((0, _gettext.__)('Reload'));
+
+  reloadButton.onclick = () => {
+    doReloadPage();
+    return false;
+  };
+
+  const errorDiv = (0, _utils.fromHtml)('<div class="error"></div>');
+  errorDiv.append(text);
+  errorDiv.append(reloadButton);
+  rootDiv.prepend(errorDiv);
 };
 
 const installGlobalErrorHandler = () => {
@@ -22640,7 +22651,7 @@ exports.isStatsValid = isStatsValid;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.createAnchor = exports.parseSearchString = exports.fromHtml = exports.htmlEscape = exports.unduplicate = exports.isSubset = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
+exports.doReloadPage = exports.createAnchor = exports.parseSearchString = exports.fromHtml = exports.htmlEscape = exports.unduplicate = exports.isSubset = exports.clearArray = exports.divCeil = exports.sleepMillis = exports.monotonicNowMillis = void 0;
 
 const monotonicNowMillis = () => window.performance.now();
 
@@ -22723,6 +22734,12 @@ const createAnchor = link => {
 };
 
 exports.createAnchor = createAnchor;
+
+const doReloadPage = () => {
+  window.location.reload();
+};
+
+exports.doReloadPage = doReloadPage;
 
 },{}],24:[function(require,module,exports){
 "use strict";
