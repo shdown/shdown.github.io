@@ -804,18 +804,22 @@ var _gettext = require("./gettext.js");
 
 var _utils = require("./utils.js");
 
-const createFieldSet = () => {
-  return (0, _utils.fromHtml)(`<fieldset></fieldset>`);
-};
+class InputField {
+  constructor(allElements, mainElement) {
+    this.allElements = allElements;
+    this.mainElement = mainElement;
+  }
 
-const createInput = params => {
-  const inputId = params.what === undefined ? undefined : `fv-input-id-${params.what}`;
+}
+
+const makeInputField = params => {
+  const all = [];
 
   if (params.label !== undefined) {
     const label = (0, _utils.fromHtml)('<label class="fv-input-label"></label>');
-    if (inputId !== undefined) label.setAttribute('for', inputId);
+    label.setAttribute('for', params.id);
     label.append(params.label);
-    params.container.append(label);
+    all.push(label);
   }
 
   let input;
@@ -826,122 +830,123 @@ const createInput = params => {
     input = (0, _utils.fromHtml)(`<input type="text"></input>`);
   }
 
-  if (inputId !== undefined) input.setAttribute('id', inputId);
-  params.container.append(input);
+  input.setAttribute('id', params.id);
+  all.push(input);
 
   if (params.note !== undefined) {
     const note = (0, _utils.fromHtml)(`<div class="fv-input-note"></div>`);
     note.append(params.note);
-    params.container.append(note);
+    all.push(note);
   }
 
   if (params.extraAttributes !== undefined) {
-    for (const attr in params.extraAttributes) input.setAttribute(attr, params.extraAttributes[attr]);
+    for (const attr in params.extraAttributes) {
+      input.setAttribute(attr, params.extraAttributes[attr]);
+    }
   }
 
-  return input;
+  return new InputField(all, input);
 };
 
 const createButton = params => {
-  const btn = (0, _utils.fromHtml)(`<button></button>`);
-  btn.append(params.value);
-  if (params.kind !== undefined) btn.setAttribute('class', `fv-button-${params.kind}`);
+  const btn = (0, _utils.fromHtml)('<button></button>');
+  btn.setAttribute('id', params.id);
+  btn.append(params.text);
   if (params.type !== undefined) btn.setAttribute('type', params.type);
-  if (params.onclick !== undefined) btn.onclick = params.onclick;
-  params.container.append(btn);
+  if (params.clickHandler !== undefined) btn.onclick = params.clickHandler;
   return btn;
+};
+
+const createFieldSet = children => {
+  const f = (0, _utils.fromHtml)('<fieldset></fieldset>');
+
+  for (const c of children) {
+    if (c instanceof InputField) {
+      for (const elem of c.allElements) {
+        f.appendChild(elem);
+      }
+    } else {
+      f.appendChild(c);
+    }
+  }
+
+  return f;
 };
 
 class FormView extends _view.View {
   constructor() {
     super();
-    this._form = (0, _utils.fromHtml)('<form id="fv-form"></form>');
-    {
-      const fieldSet = createFieldSet();
-      this._userInput = createInput({
-        container: fieldSet,
-        what: 'uid',
-        label: (0, _gettext.__)('User:'),
-        note: (0, _gettext.__)('ID or handle (for example, “1” or “durov”)'),
-        extraAttributes: {
-          required: '1'
-        }
-      });
+    const userInputField = makeInputField({
+      id: 'fv-input-id-uid',
+      label: (0, _gettext.__)('User:'),
+      note: (0, _gettext.__)('ID or handle (for example, “1” or “durov”)'),
+      extraAttributes: {
+        required: '1'
+      }
+    });
+    this._userInput = userInputField.mainElement;
+    const ownersInputField = makeInputField({
+      id: 'fv-input-id-oids',
+      label: (0, _gettext.__)('Public list:'),
+      note: (0, _gettext.__)('IDs or handles; separate with commas, spaces or line feeds'),
+      textarea: true,
+      extraAttributes: {
+        required: '1'
+      }
+    });
+    this._ownersInput = ownersInputField.mainElement;
+    const getSubsBtn = createButton({
+      id: 'fv-button-get-subs',
+      text: (0, _gettext.__)('Fill with user subscriptions'),
+      clickHandler: () => {
+        super._emitSignal('get-subs');
 
-      this._form.appendChild(fieldSet);
-    }
-    {
-      const fieldSet = createFieldSet();
-      this._ownersInput = createInput({
-        container: fieldSet,
-        what: 'oids',
-        label: (0, _gettext.__)('Public list:'),
-        note: (0, _gettext.__)('IDs or handles; separate with commas, spaces or line feeds'),
-        textarea: true,
-        extraAttributes: {
-          required: '1'
-        }
-      });
-      this._getSubsBtn = createButton({
-        container: fieldSet,
-        value: (0, _gettext.__)('Fill with user subscriptions'),
-        kind: 'get-subs',
-        onclick: () => {
-          super._emitSignal('get-subs');
+        return false;
+      }
+    });
+    const timeLimitInputField = makeInputField({
+      id: 'fv-input-id-tl',
+      label: (0, _gettext.__)('Time limit, days:'),
+      extraAttributes: {
+        type: 'number',
+        value: '30',
+        required: '1'
+      }
+    });
+    this._timeLimitInput = timeLimitInputField.mainElement;
+    const submitBtn = createButton({
+      id: 'fv-button-find',
+      text: (0, _gettext.__)('Find!'),
+      type: 'submit'
+    });
+    const archveBtn = createButton({
+      id: 'fv-button-open-archive',
+      text: (0, _gettext.__)('Archive'),
+      clickHandler: () => {
+        super._emitSignal('open-archive');
 
-          return false;
-        }
-      });
+        return false;
+      }
+    });
+    const reloadBtn = createButton({
+      id: 'fv-button-reload',
+      text: (0, _gettext.__)('Reload'),
+      clickHandler: () => {
+        super._emitSignal('reload');
 
-      this._form.appendChild(fieldSet);
-    }
-    {
-      const fieldSet = createFieldSet();
-      this._timeLimitInput = createInput({
-        container: fieldSet,
-        what: 'tl',
-        label: (0, _gettext.__)('Time limit, days:'),
-        extraAttributes: {
-          type: 'number',
-          value: '30',
-          required: '1'
-        }
-      });
-
-      this._form.appendChild(fieldSet);
-    }
-    {
-      const fieldSet = createFieldSet();
-      this._submitBtn = createButton({
-        container: fieldSet,
-        value: (0, _gettext.__)('Find!'),
-        kind: 'find',
-        type: 'submit'
-      });
-      this._archiveBtn = createButton({
-        container: fieldSet,
-        value: (0, _gettext.__)('Archive'),
-        kind: 'open-archive',
-        onclick: () => {
-          super._emitSignal('open-archive');
-
-          return false;
-        }
-      });
-      this._reloadBtn = createButton({
-        container: fieldSet,
-        value: (0, _gettext.__)('Reload'),
-        kind: 'reload',
-        onclick: () => {
-          super._emitSignal('reload');
-
-          return false;
-        }
-      });
-
-      this._form.appendChild(fieldSet);
-    }
+        return false;
+      }
+    });
     this._log = (0, _utils.fromHtml)('<div class="fv-form-log-area"></div>');
+    this._form = (0, _utils.fromHtml)('<form id="fv-form"></form>');
+
+    this._form.appendChild(createFieldSet([userInputField]));
+
+    this._form.appendChild(createFieldSet([ownersInputField, getSubsBtn]));
+
+    this._form.appendChild(createFieldSet([timeLimitInputField]));
+
+    this._form.appendChild(createFieldSet([submitBtn, archveBtn, reloadBtn]));
 
     this._form.appendChild(this._log);
 
