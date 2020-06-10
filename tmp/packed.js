@@ -1440,7 +1440,7 @@ const asyncMain = async () => {
     });
   });
   formView.subscribe('reload', () => {
-    doReloadPage();
+    (0, _utils.doReloadPage)();
   });
   archiveView.subscribe('back', () => {
     viewManager.show(formView);
@@ -1460,7 +1460,7 @@ const reportError = text => {
   reloadButton.append((0, _gettext.__)('Reload'));
 
   reloadButton.onclick = () => {
-    doReloadPage();
+    (0, _utils.doReloadPage)();
     return false;
   };
 
