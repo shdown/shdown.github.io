@@ -31,7 +31,7 @@ siteroot/%: static/%
 
 post:
 	@set -e; \
-	t=$$(tempfile -s .md); \
+	t=$$(mktemp --suffix=.md); \
 	while true; do \
 		$(EDITOR) "$$t"; \
 		b=$$($(DSSSG) get-basename "$$t") && break; \
