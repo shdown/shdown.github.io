@@ -24054,6 +24054,8 @@ class Transport {
         }
       });
     } catch (err) {
+      console.log('caught:');
+      console.log(err);
       if (!(err instanceof VkRequestError)) throw err; //if (err.data.error_type === 'client_error' && err.data.error_data.error_code === 1) {
       //    const reason = err.data.error_data.error_reason;
       //    throw new VkApiError(reason.error_code, reason.error_msg);
