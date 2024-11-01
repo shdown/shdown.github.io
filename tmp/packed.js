@@ -877,7 +877,7 @@ const createCheckboxInputField = params => {
   const label = (0, _utils.fromHtml)('<label class="fv-input-label"></label>');
   label.setAttribute('for', params.id);
   label.append(params.label);
-  return InputField([checkbox, label], checkbox);
+  return new InputField([checkbox, label], checkbox);
 };
 
 const createFieldSet = children => {
