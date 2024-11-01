@@ -866,16 +866,18 @@ const createButton = params => {
   return btn;
 };
 
-const makeCheckbox = params => {
-  const cb = (0, _utils.fromHtml)('<input type="checkbox"></input>');
-  cb.setAttribute('id', params.id);
-  cb.append(params.text);
+const createCheckboxInputField = params => {
+  const checkbox = (0, _utils.fromHtml)('<input type="checkbox"></input>');
+  checkbox.setAttribute('id', params.id);
 
   if (params.checked !== undefined) {
-    cb.checked = params.checked;
+    checkbox.checked = params.checked;
   }
 
-  return cb;
+  const label = (0, _utils.fromHtml)('<label class="fv-input-label"></label>');
+  label.setAttribute('for', params.id);
+  label.append(params.label);
+  return InputField(all, checkbox);
 };
 
 const createFieldSet = children => {
@@ -935,11 +937,12 @@ class FormView extends _view.View {
       }
     });
     this._timeLimitInput = timeLimitInputField.mainElement;
-    this._skipStatsCheckbox = makeCheckbox({
+    const skipStatsInputField = createCheckboxInputField({
       id: 'fv-input-id-ss',
-      text: (0, _gettext.__)('Skip gathering staticstics'),
+      label: (0, _gettext.__)('Skip gathering staticstics'),
       checked: false
     });
+    this._skipStatsCheckbox = skipStatsInputField.mainElement;
     const submitBtn = createButton({
       id: 'fv-button-find',
       text: (0, _gettext.__)('Find!'),
@@ -972,7 +975,7 @@ class FormView extends _view.View {
 
     this._form.appendChild(createFieldSet([timeLimitInputField]));
 
-    this._form.appendChild(createFieldSet([this._skipStatsCheckbox]));
+    this._form.appendChild(createFieldSet([skipStatsInputField]));
 
     this._form.appendChild(createFieldSet([submitBtn, archveBtn, reloadBtn]));
 
