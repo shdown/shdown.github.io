@@ -6,6 +6,7 @@
 \usepackage{supertabular}
 \usepackage{fontawesome}
 \usepackage{geometry}
+\usepackage{tabularx}
 \geometry{
     hmargin=1.5cm,
     vmargin=1.75cm,
@@ -135,14 +136,83 @@ x86-64 assembly.
 
 \section{Projects}
 
-\begin{tabular}{ l l }
-    2016---present & \href{https://github.com/shdown/luastatus}{\textbf{luastatus}}, a universal status bar content generator \\
-    2017 & \href{http://0x1.tv/img_auth.php/f/fe/Lua-%D1%81%D0%BA%D1%80%D0%B8%D0%BF%D1%82%D0%B8%D0%BD%D0%B3_%D0%B2_strace_%28%D0%92%D0%B8%D0%BA%D1%82%D0%BE%D1%80_%D0%9A%D1%80%D0%B0%D0%BF%D0%B8%D0%B2%D0%B5%D0%BD%D1%81%D0%BA%D0%B8%D0%B9%2C_OSSDEVCONF-2017%29.pdf}{\textbf{support for Lua scripting in strace}}, Google Summer of Code---2017 project \\
-    2020 & \href{https://github.com/shdown/libdeci}{\textbf{libdeci}}, an arbitrary-precision decimal arithmetic library for C \\
-    2020---present & \href{https://github.com/shdown/calx}{\textbf{calx}}, a bc-like programming language \\
-    2020 & \href{https://github.com/shdown/decimal-multiplication-paper}{\textbf{``Speeding up decimal multiplication''}}, a research project \\
-    2022 & \href{https://github.com/shdown/fiwia}{\textbf{FiWiA}}, a generator of x86-64 machine code for fixed-width multi-word arithmetics \\
-\end{tabular}
+\begin{tabularx}{\textwidth}{ l X }
+    2016---present & \href{https://github.com/shdown/luastatus}{\textbf{luastatus}}, a universal status bar content generator
+    \newline
+    \footnotesize{
+        luastatus is a universal status bar content generator. It allows the user to configure the way the data from event sources is processed and shown, with Lua.
+        Its main feature is that the content can be updated immediately as some event occurs, be it a change of keyboard layout, active window title, volume or a song in your favorite music player (provided that there is a plugin for it) — a thing rather uncommon for tiling window managers.
+        Its motto is:
+        \begin{quote}
+        No more heavy-forking, second-lagging shell-script status bar generators!
+        \end{quote}
+        It has a modular architecture, supporing plugins for providing data and barlibs for interacting with different status bars.
+        It supports \textit{i3wm}, \textit{dwm}, \textit{lemonbar}, \textit{dzen}/\textit{dzen2}, \textit{xmobar}, \textit{yabar}, \textit{dvtm}, and others.
+    }
+    \\
+    \medskip
+
+    2017 & \href{http://0x1.tv/img_auth.php/f/fe/Lua-\%D1\%81\%D0\%BA\%D1\%80\%D0\%B8\%D0\%BF\%D1\%82\%D0\%B8\%D0\%BD\%D0\%B3_\%D0\%B2_strace_\%28\%D0\%92\%D0\%B8\%D0\%BA\%D1\%82\%D0\%BE\%D1\%80_\%D0\%9A\%D1\%80\%D0\%B0\%D0\%BF\%D0\%B8\%D0\%B2\%D0\%B5\%D0\%BD\%D1\%81\%D0\%BA\%D0\%B8\%D0\%B9\%2C_OSSDEVCONF-2017\%29.pdf}{\textbf{support for Lua scripting in strace}}, Google Summer of Code---2017 project
+    \newline
+    \footnotesize{
+        I extended the \textit{strace} project with tampering capability, allowing the user to inject fake syscall results, and read and write the memory of the process being traced.
+    }
+    \\
+    \medskip
+
+    2020 & \href{https://github.com/shdown/libdeci}{\textbf{libdeci}}, an arbitrary-precision decimal arithmetic library for C
+    \newline
+    \footnotesize{
+        This is an arbitrary-precision decimal arithmetic library for C with add-on libraries
+        \href{https://github.com/shdown/libdeci-kara}{\textbf{libdeci-kara}} implementing Karatsuba multiplication,
+        \href{https://github.com/shdown/libdeci-ntt}{\textbf{libdeci-ntt}} implementing multiplication via Number-Theoretic Transform (NTT), a variant of Fourier transform,
+        and \href{https://github.com/shdown/libdeci-newt}{\textbf{libdeci-newt}} implementing fast inversion and division using Newton's method.
+        It is faster than the \textit{mpdecimal} library.
+    }
+    \\
+    \medskip
+
+    2020---present & \href{https://github.com/shdown/calx}{\textbf{calx}}, a bc-like programming language
+    \newline
+    \footnotesize{
+        \textit{calx} an attempt to make a modern replacement for bc, while preserving its best features, such as big-decimal numbers and explicit support for interactivity in the language.
+        It is a full-fledged programming language with functions, local and global variables, lists, dicts, strings, etc.
+    }
+    \\
+    \medskip
+
+    2020 & \href{https://github.com/shdown/decimal-multiplication-paper}{\textbf{``Speeding up decimal multiplication''}}, a research project (\href{https://arxiv.org/abs/2011.11524}{\textbf{ArXiv.org URL}}).
+    \newline
+    \footnotesize{
+        This research project achieves a 3x---5x speedup over the \textit{mpdecimal} library.
+        The paper describes the implementation and discuss further possible optimizations. It also present a simple cache-efficient algorithm for in-place
+        $2^n \times n$ or $n \times 2^n$ matrix transposition, the need for which arises in the
+        ``six-step algorithm'' variation of the matrix Fourier algorithm, and
+        which does not seem to be widely known. Another finding is that use
+        of two prime moduli instead of three makes sense even considering the
+        worst case of increasing the size of the input, and makes for simpler
+        answer recovery.
+    }
+    \\
+    \medskip
+
+    2022 & \href{https://github.com/shdown/fiwia}{\textbf{FiWiA}}, a generator of x86-64 machine code for fixed-width multi-word arithmetics
+    \newline
+    \footnotesize{
+        The need for fixed-width multi-word arithmetics frequently arises in cryptography.
+        In this setting, full unroll is usually desirable in two reasons: loop overhead and the need to pass the carry flag to the next iteration,
+        which, without unrolling, would have to be done via saving the carry in a register and restoring it in the next iteration,
+        which is suboptimal in performance.
+        \textit{fiwia} generates fully unrolled x86-64 assembly for fixed-width arithmetic operations, such as:
+        addition/subtraction,
+        masked addition/subtraction,
+        negation,
+        comparison,
+        multiplication,
+        bit shifts.
+    }
+    \\
+\end{tabularx}
 
 \medskip
 
