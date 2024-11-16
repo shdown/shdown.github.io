@@ -15,6 +15,7 @@
 }
 \usepackage[sf,scale=0.95]{libertine}
 \usepackage[usenames,svgnames]{xcolor}
+
 \definecolor{text}{HTML}{2b2b2b}
 \definecolor{headings}{HTML}{701112}
 \definecolor{shade}{HTML}{F5DD9D}
@@ -137,6 +138,7 @@ x86-64 assembly.
 \section{Projects}
 
 \begin{tabularx}{\textwidth}{ l X }
+
     2016---present & \href{https://github.com/shdown/luastatus}{\textbf{luastatus}}, a universal status bar content generator
     \newline
     \footnotesize{
@@ -210,6 +212,24 @@ x86-64 assembly.
         comparison,
         multiplication,
         bit shifts.
+    }
+    \\
+    \medskip
+
+    2022 & \href{https://github.com/shdown/sloppy-json}{\textbf{sloppy-json}}, span-oriented C JSON parser with an external preprocessor to sweeten the process of parsing
+    \newline
+    \footnotesize{
+        Ergonomic parsing of JSON in C is quite a challenging task: virtually all existing parsers are either:
+        \begin{itemize}
+            \item DOM-like (e.g. \textit{cJSON}): they convert JSON to ``objects'' with \textbf{dynamically allocated} arrays and dictionaries, which the user is supposed to fetch data from and then destroy the ``objects''; or
+            \item SAX-like (e.g. \textit{YAJL}): they allow the user to iterate over JSON, which in practice means a lot of callbacks, which are tedious to write and lead to sufficient performance loss, because the callback functions are called by pointer and can not be inlined.
+        \end{itemize}
+        In settings where we cannot afford dynamic memory allocation, e.g. when tail latency is important, DOM-like parsers cannot be used.
+        Instead of focusing on JSON objects, \textit{sloppy-json} instead operates on spans (a span is a pair of pointer and length) which, when parsed, represent JSON objects.
+        It provides functions to classify a span, iterate over spans representing arrays and dictionaries (the iterator is a span or a pair of spans), convert spans into numbers, unescaping string spans, and everything else needed to ``parse'' JSON.
+        It does not allocate any memory.
+        It also comes with an external preprocessor written in python to ``sweeten'' the process of parsing.
+        It also provides some utility functions to generate JSON (e.g. formatting numbers and escaping strings).
     }
     \\
 \end{tabularx}
