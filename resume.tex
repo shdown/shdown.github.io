@@ -222,7 +222,7 @@ x86-64 assembly.
         Ergonomic parsing of JSON in C is quite a challenging task: virtually all existing parsers are either:
         \begin{itemize}
             \item DOM-like (e.g. \textit{cJSON}): they convert JSON to ``objects'' with \textbf{dynamically allocated} arrays and dictionaries, which the user is supposed to fetch data from and then destroy the ``objects''; or
-            \item SAX-like (e.g. \textit{YAJL}): they allow the user to iterate over JSON, which in practice means a lot of callbacks, which are tedious to write and lead to sufficient performance loss, because the callback functions are called by pointer and can not be inlined.
+            \item SAX-like (e.g. \textit{YAJL}): they allow the user to iterate over JSON, which in practice means a lot of callbacks, which are tedious to write and lead to sufficient performance loss, because the callback functions are called by pointer and cannot be inlined.
         \end{itemize}
         In settings where we cannot afford dynamic memory allocation, e.g. when tail latency is important, DOM-like parsers cannot be used.
         Instead of focusing on JSON objects, \textit{sloppy-json} instead operates on spans (a span is a pair of pointer and length) which, when parsed, represent JSON objects.
