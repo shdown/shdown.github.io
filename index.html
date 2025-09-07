@@ -42,6 +42,15 @@
             margin-bottom: 0.5em;
         }
 
+        .my_project_subhead {
+            font-size: large;
+            margin-top: 0.5em;
+            font-weight: normal;
+            margin-bottom: 0.5em;
+            background-color: #b5e5a0;
+            background: linear-gradient(#b5e5a0, #dddddd);
+        }
+
         .my_project_quote {
             font-style: italic;
             margin-top: 0.5em;
@@ -75,7 +84,7 @@
 
     <blockquote class="my_project_quote">No more heavy-forking, second-lagging shell-script status bar generators!</blockquote>
 
-    It has a modular architecture, supporing plugins for providing data and barlibs for interacting with different status
+    It has a modular architecture, supporting plugins for providing data and barlibs for interacting with different status
     bars. It supports <b>i3wm</b>, <b>dwm</b>, <b>lemonbar</b>, <b>dzen</b>/<b>dzen2</b>, <b>xmobar</b>, <b>yabar</b>, <b>dvtm</b>,
     and others.
 </div>
@@ -84,11 +93,35 @@
 
 <div class="my_project">
     <h1 class="my_project_head">
-        <a href="https://github.com/shdown/cmenu"><b>cmenu</b></a>, a column-layout dynamic menu for the terminal
+        Other little tools for Linux desktop
     </h1>
 
+    <h2 class="my_project_subhead">
+        <a href="https://github.com/shdown/cmenu"><b>cmenu</b></a>, a column-layout dynamic menu for the terminal
+    </h2>
     <b>cmenu</b> is like dmenu for terminal, but it’s also multi-column.
     It can be used to select a Wi-Fi network to connect to, select a device to mount, and similar things.
+    <div class="subhead_hr"></div>
+
+    <h2 class="my_project_subhead">
+        <a href="https://github.com/shdown/motify-send"><b>motify-send</b></a>, a <b>notify-send</b> with memory
+    </h2>
+
+    <b>motify-send</b>, like <b>notify-send</b>, can send notifications to a notification daemon.
+    However, unlike <b>notify-send</b>, it is able to re-use previous notification with given
+    “application name”. Thus it can be used to dynamically change the content of a notification.
+    <br/>
+    Consider, for example, notifications about a change of screen brightness:
+    if the user adjusted the brightness in 5 steps, we don’t want to send 5 notifications; instead, we
+    want to show a single notification with its content dynamically updated.
+
+    <div class="subhead_hr"></div>
+
+    <h2 class="my_project_subhead">
+        <a href="https://github.com/shdown/zzz"><b>zzz</b></a> — sleep with feedback
+    </h2>
+
+    This program is just like <b>sleep</b>, but also shows remaining or elapsed time in human-readable form.
 </div>
 
 <div class="regular_hr"></div>
