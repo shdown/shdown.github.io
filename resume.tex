@@ -3,7 +3,6 @@
 \usepackage[utf8]{inputenc}
 %\usepackage[russian]{babel}
 
-\usepackage{supertabular}
 \usepackage{fontawesome}
 \usepackage{geometry}
 \usepackage{tabularx}
@@ -62,7 +61,6 @@ Author of a number of side projects and papers.
 
 Software design $\cdot$
 Algorithms and data structures $\cdot$
-Optimization $\cdot$
 C $\cdot$
 C++ $\cdot$
 Go $\cdot$
@@ -72,14 +70,6 @@ JavaScript $\cdot$
 x86-64 assembly.
 
 \medskip
-
-%\section{Education}
-%
-%\begin{tabular}{ l l }
-%    2016---present & \textbf{Moscow Institute of Physics and Technology}, Department of Innovations and High Technology \\
-%\end{tabular}
-%
-%\medskip
 
 \section{Experience}
 
@@ -140,97 +130,113 @@ x86-64 assembly.
 
     2016---present & \href{https://github.com/shdown/luastatus}{\textbf{luastatus}}, a universal status bar content generator
     \newline
-    \footnotesize{
-        luastatus is a universal status bar content generator. It allows the user to configure the way the data from event sources is processed and shown, with Lua.
-        Its main feature is that the content can be updated immediately as some event occurs, be it a change of keyboard layout, active window title, volume or a song in your favorite music player (provided that there is a plugin for it) — a thing rather uncommon for tiling window managers.
-        Its motto is:
-        \begin{quote}
-        No more heavy-forking, second-lagging shell-script status bar generators!
-        \end{quote}
-        It has a modular architecture, supporing plugins for providing data and barlibs for interacting with different status bars.
-        It supports \textit{i3wm}, \textit{dwm}, \textit{lemonbar}, \textit{dzen}/\textit{dzen2}, \textit{xmobar}, \textit{yabar}, \textit{dvtm}, and others.
-    }
+    \textit{luastatus} is a universal status bar content generator. It allows the user to configure the way the data from event sources is processed and shown, with Lua.
+    Its main feature is that the content can be updated immediately as some event occurs, be it a change of keyboard layout, active window title, volume or a song in your favorite music player (provided that there is a plugin for it) — a thing rather uncommon for tiling window managers.
+    Its motto is:
+    \begin{quote}
+    No more heavy-forking, second-lagging shell-script status bar generators!
+    \end{quote}
+    It has a modular architecture, supporing plugins for providing data and barlibs for interacting with different status bars.
+    It supports \textit{i3wm}, \textit{dwm}, \textit{lemonbar}, \textit{dzen}/\textit{dzen2}, \textit{xmobar}, \textit{yabar}, \textit{dvtm}, and others.
     \\
     \medskip
 
     2017 & \href{http://0x1.tv/img_auth.php/f/fe/Lua-\%D1\%81\%D0\%BA\%D1\%80\%D0\%B8\%D0\%BF\%D1\%82\%D0\%B8\%D0\%BD\%D0\%B3_\%D0\%B2_strace_\%28\%D0\%92\%D0\%B8\%D0\%BA\%D1\%82\%D0\%BE\%D1\%80_\%D0\%9A\%D1\%80\%D0\%B0\%D0\%BF\%D0\%B8\%D0\%B2\%D0\%B5\%D0\%BD\%D1\%81\%D0\%BA\%D0\%B8\%D0\%B9\%2C_OSSDEVCONF-2017\%29.pdf}{\textbf{support for Lua scripting in strace}}, Google Summer of Code---2017 project
     \newline
-    \footnotesize{
-        I extended the \textit{strace} project with tampering capability, allowing the user to inject fake syscall results, and read and write the memory of the process being traced.
-    }
+    I extended the \textit{strace} project with tampering capability, allowing the user to inject fake syscall results, and read and write the memory of the process being traced.
     \\
     \medskip
 
     2020 & \href{https://github.com/shdown/libdeci}{\textbf{libdeci}}, an arbitrary-precision decimal arithmetic library for C
     \newline
-    \footnotesize{
-        This is an arbitrary-precision decimal arithmetic library for C with add-on libraries
-        \href{https://github.com/shdown/libdeci-kara}{\textbf{libdeci-kara}} implementing Karatsuba multiplication,
-        \href{https://github.com/shdown/libdeci-ntt}{\textbf{libdeci-ntt}} implementing multiplication via Number-Theoretic Transform (NTT), a variant of Fourier transform,
-        and \href{https://github.com/shdown/libdeci-newt}{\textbf{libdeci-newt}} implementing fast inversion and division using Newton's method.
-        It is faster than the \textit{mpdecimal} library.
-    }
+    This is an arbitrary-precision decimal arithmetic library for C with add-on libraries
+    \href{https://github.com/shdown/libdeci-kara}{\textbf{libdeci-kara}} implementing Karatsuba multiplication,
+    \href{https://github.com/shdown/libdeci-ntt}{\textbf{libdeci-ntt}} implementing multiplication via Number-Theoretic Transform (NTT), a variant of Fourier transform,
+    and \href{https://github.com/shdown/libdeci-newt}{\textbf{libdeci-newt}} implementing fast inversion and division using Newton's method.
+    It is faster than the \textit{mpdecimal} library.
     \\
     \medskip
 
     2020---present & \href{https://github.com/shdown/calx}{\textbf{calx}}, a bc-like programming language
     \newline
-    \footnotesize{
-        \textit{calx} an attempt to make a modern replacement for bc, while preserving its best features, such as big-decimal numbers and explicit support for interactivity in the language.
-        It is a full-fledged programming language with functions, local and global variables, lists, dicts, strings, etc.
-    }
+    \textit{calx} an attempt to make a modern replacement for bc, while preserving its best features, such as big-decimal numbers and explicit support for interactivity in the language.
+    It is a full-fledged programming language with functions, local and global variables, lists, dicts, strings, etc.
     \\
     \medskip
 
     2020 & \href{https://github.com/shdown/decimal-multiplication-paper}{\textbf{``Speeding up decimal multiplication''}}, a research project (\href{https://arxiv.org/abs/2011.11524}{\textbf{ArXiv.org URL}}).
     \newline
-    \footnotesize{
-        This research project achieves a 3x---5x speedup over the \textit{mpdecimal} library.
-        The paper describes the implementation and discusses further possible optimizations. It also present a simple cache-efficient algorithm for in-place
-        $2^n \times n$ or $n \times 2^n$ matrix transposition, the need for which arises in the
-        ``six-step algorithm'' variation of the matrix Fourier algorithm, and
-        which does not seem to be widely known. Another finding is that use
-        of two prime moduli instead of three makes sense even considering the
-        worst case of increasing the size of the input, and makes for simpler
-        answer recovery.
-    }
+    This research project achieves a 3x---5x speedup over the \textit{mpdecimal} library.
+    The paper describes the implementation and discusses further possible optimizations. It also present a simple cache-efficient algorithm for in-place
+    $2^n \times n$ or $n \times 2^n$ matrix transposition, the need for which arises in the
+    ``six-step algorithm'' variation of the matrix Fourier algorithm, and
+    which does not seem to be widely known. Another finding is that use
+    of two prime moduli instead of three makes sense even considering the
+    worst case of increasing the size of the input, and makes for simpler
+    answer recovery.
     \\
     \medskip
 
     2022 & \href{https://github.com/shdown/fiwia}{\textbf{FiWiA}}, a generator of x86-64 machine code for fixed-width multi-word arithmetics
     \newline
-    \footnotesize{
-        The need for fixed-width multi-word arithmetics frequently arises in cryptography.
-        In this setting, full unroll is usually desirable in two reasons: loop overhead and the need to pass the carry flag to the next iteration,
-        which, without unrolling, would have to be done via saving the carry in a register and restoring it in the next iteration,
-        which is suboptimal in performance.
-        \textit{fiwia} generates fully unrolled x86-64 assembly for fixed-width arithmetic operations, such as:
-        addition/subtraction,
-        masked addition/subtraction,
-        negation,
-        comparison,
-        multiplication,
-        bit shifts.
-    }
+    The need for fixed-width multi-word arithmetics frequently arises in cryptography.
+    In this setting, full unroll is usually desirable in two reasons: loop overhead and the need to pass the carry flag to the next iteration,
+    which, without unrolling, would have to be done via saving the carry in a register and restoring it in the next iteration,
+    which is suboptimal in performance.
+    \textit{fiwia} generates fully unrolled x86-64 assembly for fixed-width arithmetic operations, such as:
+    addition/subtraction,
+    masked addition/subtraction,
+    negation,
+    comparison,
+    multiplication,
+    bit shifts.
     \\
     \medskip
 
     2022 & \href{https://github.com/shdown/sloppy-json}{\textbf{sloppy-json}}, span-oriented C JSON parser with an external preprocessor to sweeten the process of parsing
     \newline
-    \footnotesize{
-        Ergonomic parsing of JSON in C is quite a challenging task: virtually all existing parsers are either:
-        \begin{itemize}
-            \item DOM-like (e.g. \textit{cJSON}): they convert JSON to ``objects'' with \textbf{dynamically allocated} arrays and dictionaries, which the user is supposed to fetch data from and then destroy the ``objects''; or
-            \item SAX-like (e.g. \textit{YAJL}): they allow the user to iterate over JSON, which in practice means a lot of callbacks, which are tedious to write and lead to sufficient performance loss, because the callback functions are called by pointer and cannot be inlined.
-        \end{itemize}
-        In settings where we cannot afford dynamic memory allocation, e.g. when tail latency is important, DOM-like parsers cannot be used.
-        Instead of focusing on JSON objects, \textit{sloppy-json} instead operates on spans (a span is a pair of pointer and length) which, when parsed, represent JSON objects.
-        It provides functions to classify a span, iterate over spans representing arrays and dictionaries (the iterator is a span or a pair of spans), convert spans into numbers, unescaping string spans, and everything else needed to ``parse'' JSON.
-        It does not allocate any memory.
-        It also comes with an external preprocessor written in python to ``sweeten'' the process of parsing.
-        It also provides some utility functions to generate JSON (e.g. formatting numbers and escaping strings).
-    }
+    Ergonomic parsing of JSON in C is quite a challenging task: virtually all existing parsers are either:
+    \begin{itemize}
+        \item DOM-like (e.g. \textit{cJSON}): they convert JSON to ``objects'' with \textbf{dynamically allocated} arrays and dictionaries, which the user is supposed to fetch data from and then destroy the ``objects''; or
+        \item SAX-like (e.g. \textit{YAJL}): they allow the user to iterate over JSON, which in practice means a lot of callbacks, which are tedious to write and lead to sufficient performance loss, because the callback functions are called by pointer and cannot be inlined.
+    \end{itemize}
+    In settings where we cannot afford dynamic memory allocation, e.g. when tail latency is important, DOM-like parsers cannot be used.
+    Instead of focusing on JSON objects, \textit{sloppy-json} instead operates on spans (a span is a pair of pointer and length) which, when parsed, represent JSON objects.
+    It provides functions to classify a span, iterate over spans representing arrays and dictionaries (the iterator is a span or a pair of spans), convert spans into numbers, unescaping string spans, and everything else needed to ``parse'' JSON.
+    It does not allocate any memory.
+    It also comes with an external preprocessor written in python to ``sweeten'' the process of parsing.
+    It also provides some utility functions to generate JSON (e.g. formatting numbers and escaping strings).
     \\
+\end{tabularx}
+
+\begin{tabularx}{\textwidth}{ l X }
+
+    2025 & \href{https://github.com/shdown/glass-paper}{\textbf{``glass: ordered set data structure for client-side order books''}}, a paper
+    \newline
+    In this paper I present my implementation of ordered set, specifically for maintaining order books, based on a trie.
+    It only supports integer keys and is optimized for market data, namely for what is called ``sequential locality'' in the paper.
+    The following is the list of what I believe to be novelties:
+    \begin{itemize}
+        \item \textit{cached path} to exploit \textit{sequential locality} in market data, and fast truncation thereof on erase operation;
+        \item a hash table (or, rather, a \textit{cache table}) with hard $O(1)$ time guarantees on any operation to speed up key lookup (up to a pre-leaf node);
+        \item hardware-accelerated ``find next/previous set bit'' operations with \textbf{BMI2} instruction set extension on x86-64;
+        \item order book-specific features: the preemption principle and the tree restructure operation that prevent the tree from consuming too much memory.
+    \end{itemize}
+    The following speedups are achieved over C++'s standard std::map container: 6x---20x on modifying operations, 30x on lookup operations, 9x---15x on real market data, and a more modest 2x---3x speedup on iteration.
+    \\
+    \medskip
+
+    2025---present & \href{https://github.com/shdown/jjhash}{\textbf{jjhash}}, a simple string hash function that has better speed and statistical qualities than FNV-2
+    \newline
+    \textit{jjhash} is a simple string hash function. It is:
+    \begin{itemize}
+        \item faster than FNV-2 (6x faster on pointer-and-length strings, 3x faster on null-terminated strings);
+        \item better than FNV-2 on statistical properties, especially for large power-of-two hash table sizes;
+        \item streamable (i.e. supports fast calculation of the hash of concatenation $A+B$ by the contents of $B$ and the hashing state of $A$);
+        \item has both 32-bit and 64-bit variants.
+    \end{itemize}
+    \\
+
 \end{tabularx}
 
 \medskip
@@ -240,13 +246,11 @@ x86-64 assembly.
 \parbox[top][0.12\textheight][c]{\linewidth}{
     \vspace{-0.04\textheight}
     \colorbox{shade}{
-        \begin{supertabular}{p{0.05\linewidth}|p{0.775\linewidth}}
-            %\raisebox{0pt}{\small  \faEnvelope}        & \href{mailto:krapivenskiy.va@phystech.edu}{krapivenskiy.va@phystech.edu} \\
+        \begin{tabular}{p{0.05\linewidth}|p{0.885\linewidth}}
             \raisebox{0pt}{\small  \faEnvelope}        & \href{mailto:shdownnine@gmail.com}{shdownnine@gmail.com} \\
             \raisebox{-1pt}{\small \faGithubAlt}       & \href{https://github.com/shdown}{https://github.com/shdown} \\
             \raisebox{-1pt}{\small \faLinkedinSquare}  & \href{https://www.linkedin.com/in/shdownnine}{https://www.linkedin.com/in/shdownnine} \\
-            %\raisebox{-1pt}{\small \faMapSigns}        & Dolgoprudny, Moscow oblast, Russia \\
-        \end{supertabular}
+        \end{tabular}
     }
 }
 

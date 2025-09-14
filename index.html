@@ -239,19 +239,19 @@
     </h1>
 
     In this paper I present my implementation of ordered set based on a trie.
-    It only supports integer keys and is optimized for market data, namely for what we call sequential locality.
+    It only supports integer keys and is optimized for market data, namely for what is called “sequential locality” in the paper.
     The following is the list of what I believe to be novelties:
     <ul>
         <li><i>cached path</i> to exploit sequential locality in market data, and fast truncation thereof on erase operation;</li>
         <li>a hash table (or, rather, a <i>cache table</i>) with hard O(1) time guarantees on any operation to speed up key lookup (up to a pre-leaf node);</li>
-        <li>hardware-accelerated "find next/previous set bit" operations with BMI2 instruction set extension on x86-64;</li>
+        <li>hardware-accelerated “find next/previous set bit” operations with BMI2 instruction set extension on x86-64;</li>
         <li>order book-specific features: the preemption principle and the tree restructure operation that prevent the tree from consuming too much memory.</li>
     </ul>
-    We achieve the following speedups over C++'s standard std::map container:
-    6x—20x on modifying operations,
+    The following speedups are achieved over C++’s standard <tt>std::map</tt> container:
+    6x-20x on modifying operations,
     30x on lookup operations,
-    9x—15x on real market data,
-    and a more modest 2x—3x speedup on iteration.
+    9x-15x on real market data,
+    and a more modest 2x-3x speedup on iteration.
 </div>
 
 <div class="regular_hr"></div>
