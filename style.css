@@ -1,0 +1,63 @@
+body {
+    color: black;
+    background-color: #dddddd;
+}
+
+a {
+    color: darkblue;
+}
+
+a:visited {
+    color: purple;
+}
+
+.blog_main_hr {
+    border-bottom: 0.25em dotted #302c53;
+    margin-top: 0.5em;
+}
+
+.main_hr {
+    border-bottom: 0.4em dotted #302c53;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.regular_hr {
+    border-bottom: 1px solid #302c53;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.my_project {
+}
+
+.my_project_head, .my_project_subhead {
+    padding-left: 0.25em;
+}
+
+.my_project_head {
+    font-size: larger;
+    background-color: #b2abff;
+    border: 0.15em dashed #dddddd;
+    margin-top: 0.5em;
+    font-weight: normal;
+    margin-bottom: 0.5em;
+}
+
+.my_project_subhead {
+    font-size: large;
+    margin-top: 0.5em;
+    font-weight: normal;
+    margin-bottom: 0.5em;
+    background-color: #cccccc;
+    border: 0.15em dashed #dddddd;
+}
+
+.my_project_quote {
+    font-style: italic;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.main_header {
+}
